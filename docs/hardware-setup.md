@@ -29,6 +29,16 @@ Hostname `chloespie`, user `chloewashere` — substitute your own throughout.
   USB/Ethernet side, press the tab back down
 - If the camera isn't detected later, the ribbon is almost certainly reversed
 
+## 2b. Camera orientation
+
+This camera is mounted sideways, so every script needs `--rotate 90`.
+
+It matters more than it looks: MediaPipe is trained on upright hands and gets
+noticeably worse on rotated ones. Rotating in software costs ~1ms.
+
+Aim it at wherever your hand will actually rest — not across the desk. Check the
+framing with the live view in `record.py` before recording anything.
+
 ## 3. Boot
 
 - Insert the SD card, connect power
