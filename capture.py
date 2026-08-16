@@ -8,7 +8,14 @@ later it's unambiguous which half is at fault.
 """
 
 import argparse
+import os
 import time
+
+# Both libraries are extremely chatty on import, which buries the prompts in
+# record.py. Set before importing them or it has no effect.
+os.environ.setdefault("LIBCAMERA_LOG_LEVELS", "*:ERROR")
+os.environ.setdefault("GLOG_minloglevel", "2")
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 
 import cv2
 from picamera2 import Picamera2

@@ -1,6 +1,7 @@
-"""Step 4 — 21 hand landmarks from the camera.
+"""21 hand landmarks from the camera.
 
-Also the shared tracker used by bench.py and gestures.py.
+`HandTracker` is the shared camera+MediaPipe object used by bench.py,
+gestures.py and record.py.
 
     python landmarks.py
 
@@ -10,7 +11,13 @@ Needs hand_landmarker.task in the repo root:
 """
 
 import argparse
+import os
 import time
+
+# MediaPipe logs a wall of warnings on import, which buries record.py's prompts.
+# Must be set before the import below, not after.
+os.environ.setdefault("GLOG_minloglevel", "2")
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 
 import cv2
 import mediapipe as mp
