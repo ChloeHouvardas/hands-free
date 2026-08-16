@@ -7,21 +7,28 @@ Guided session (what you want the first time):
 
     python record.py --session
 
+Then open http://<pi>:8080 on your laptop to see what the camera sees.
+
 Single clip:
 
     python record.py --label pinch --seconds 15
 
-Output goes to recordings/<label>.jsonl. First line is a header with metadata;
-every line after is one frame.
+Output goes to recordings/<label>.jsonl. First line is a header; every line
+after is one frame.
 """
 
 import argparse
 import json
 import os
+import socket
 import sys
+import threading
 import time
 
-from landmarks import HandTracker
+import cv2
+
+from landmarks import HandTracker, draw
+from preview import Preview
 
 OUT_DIR = "recordings"
 
@@ -57,59 +64,158 @@ SESSION = [
      "     Come back, repeat ~5 times. Tests that we don't latch a stuck button."),
 ]
 
+GREEN, RED, WHITE, YELLOW = (0, 220, 0), (0, 0, 255), (255, 255, 255), (0, 200, 255)
 
-def record(tracker, label, seconds):
-    """Record one clip. Returns (frames, frames_with_hand)."""
-    os.makedirs(OUT_DIR, exist_ok=True)
-    path = os.path.join(OUT_DIR, f"{label}.jsonl")
 
-    frames = hits = 0
-    t0 = time.perf_counter()
+class Recorder:
+    """Runs the camera continuously on a background thread.
 
-    with open(path, "w") as f:
-        f.write(json.dumps({
-            "header": True,
-            "label": label,
-            "seconds": seconds,
-            "recorded_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-        }) + "\n")
+    Continuous rather than only-while-recording so the live view stays up during
+    the prompts — which is the whole point of having a live view: you can frame
+    your hand *before* the countdown ends.
+    """
 
-        for _, landmarks in tracker.frames():
-            t = time.perf_counter() - t0
-            if t > seconds:
+    def __init__(self, tracker, preview=None):
+        self.tracker = tracker
+        self.preview = preview
+        self.lock = threading.Lock()
+
+        self.mode = "idle"          # idle | countdown | recording | done
+        self.label = ""
+        self.prompt_n = ""
+        self.count = 0              # countdown number to show
+        self.seconds = 0
+        self.file = None
+        self.t0 = 0.0
+        self.frames = 0
+        self.hits = 0
+        self.hand = False
+        self.fps = 0.0
+        self._stop = False
+
+        self.thread = threading.Thread(target=self._loop, daemon=True)
+        self.thread.start()
+
+    # -- background thread ------------------------------------------------
+
+    def _loop(self):
+        last = time.perf_counter()
+        for frame, landmarks in self.tracker.frames():
+            if self._stop:
                 break
 
-            if landmarks:
-                pts = [[round(p.x, 5), round(p.y, 5), round(p.z, 5)]
-                       for p in landmarks]
-                hits += 1
-            else:
-                pts = None
+            now = time.perf_counter()
+            dt = now - last
+            last = now
+            if dt > 0:
+                self.fps = 0.9 * self.fps + 0.1 * (1 / dt)
+            self.hand = landmarks is not None
 
-            f.write(json.dumps({"t": round(t, 4), "lm": pts}) + "\n")
-            frames += 1
+            with self.lock:
+                if self.mode == "recording":
+                    t = now - self.t0
+                    if t >= self.seconds:
+                        self._close_file()
+                    else:
+                        pts = None if landmarks is None else [
+                            [round(p.x, 5), round(p.y, 5), round(p.z, 5)]
+                            for p in landmarks
+                        ]
+                        self.file.write(
+                            json.dumps({"t": round(t, 4), "lm": pts}) + "\n")
+                        self.frames += 1
+                        if landmarks:
+                            self.hits += 1
 
-            left = seconds - t
-            print(f"\r  {label}  {left:4.1f}s left   "
-                  f"hand: {'YES' if landmarks else 'no '}  "
-                  f"{frames / max(t, 1e-6):4.1f} fps   ", end="", flush=True)
+            if self.preview:
+                if landmarks:
+                    draw(frame, landmarks)
+                self._annotate(frame)
+                self.preview.update(frame)
 
-    print()
-    return frames, hits
+    def _annotate(self, frame):
+        h, w = frame.shape[:2]
+
+        if self.hand:
+            cv2.putText(frame, "HAND OK", (10, h - 15),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, GREEN, 2)
+        else:
+            cv2.putText(frame, "NO HAND", (10, h - 15),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, RED, 2)
+
+        cv2.putText(frame, f"{self.fps:.0f} fps", (w - 95, h - 15),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, WHITE, 1)
+
+        if self.prompt_n:
+            cv2.putText(frame, self.prompt_n, (10, 25),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, YELLOW, 2)
+
+        if self.mode == "countdown":
+            text = str(self.count) if self.count else "GO"
+            size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 4, 8)[0]
+            cv2.putText(frame, text, ((w - size[0]) // 2, (h + size[1]) // 2),
+                        cv2.FONT_HERSHEY_SIMPLEX, 4, YELLOW, 8)
+
+        elif self.mode == "recording":
+            left = max(0.0, self.seconds - (time.perf_counter() - self.t0))
+            cv2.circle(frame, (w - 25, 25), 10, RED, -1)
+            cv2.putText(frame, f"REC {left:4.1f}s", (w - 145, 32),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, RED, 2)
+            # progress bar along the bottom
+            done = int(w * (1 - left / self.seconds))
+            cv2.rectangle(frame, (0, h - 5), (done, h), RED, -1)
+
+    # -- main thread ------------------------------------------------------
+
+    def set_prompt(self, text, count=0, mode="idle"):
+        with self.lock:
+            self.prompt_n = text
+            self.count = count
+            self.mode = mode
+
+    def start(self, label, seconds):
+        os.makedirs(OUT_DIR, exist_ok=True)
+        path = os.path.join(OUT_DIR, f"{label}.jsonl")
+        f = open(path, "w")
+        f.write(json.dumps({
+            "header": True, "label": label, "seconds": seconds,
+            "recorded_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        }) + "\n")
+        with self.lock:
+            self.file, self.label, self.seconds = f, label, seconds
+            self.frames = self.hits = 0
+            self.t0 = time.perf_counter()
+            self.mode = "recording"
+
+    def _close_file(self):
+        """Called with the lock held."""
+        if self.file:
+            self.file.close()
+            self.file = None
+        self.mode = "done"
+
+    @property
+    def recording(self):
+        with self.lock:
+            return self.mode == "recording"
+
+    def close(self):
+        self._stop = True
+        self.thread.join(timeout=3)
+        with self.lock:
+            self._close_file()
 
 
-def summarise(label, frames, hits, seconds):
-    rate = 100 * hits / frames if frames else 0
-    fps = frames / seconds
-    flag = "" if rate > 80 else "   <-- LOW, consider re-recording"
-    print(f"  saved {frames} frames, {fps:.1f} fps, hand in {rate:.0f}%{flag}\n")
-
-
-def countdown(n=3):
-    for i in range(n, 0, -1):
-        print(f"\r  starting in {i}...  ", end="", flush=True)
-        time.sleep(1)
-    print("\r  GO                 ")
+def lan_ip():
+    """Best-effort local IP, for printing a URL that actually works."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+    except OSError:
+        return socket.gethostname()
+    finally:
+        s.close()
 
 
 def main():
@@ -120,6 +226,8 @@ def main():
     ap.add_argument("--seconds", type=int, default=20)
     ap.add_argument("--width", type=int, default=640)
     ap.add_argument("--height", type=int, default=480)
+    ap.add_argument("--port", type=int, default=8080)
+    ap.add_argument("--no-preview", action="store_true")
     args = ap.parse_args()
 
     if not args.session and not args.label:
@@ -129,28 +237,68 @@ def main():
 
     print("\nStarting the camera (a few seconds)...")
     tracker = HandTracker(args.width, args.height)
+    preview = None if args.no_preview else Preview(port=args.port)
+    rec = Recorder(tracker, preview)
 
     total = sum(s for _, s, _ in clips)
-    print("\n" + "=" * 62)
+    print("\n" + "=" * 64)
     print("  Ignore the MediaPipe warnings above — they're normal.")
-    print(f"  {len(clips)} clips, {total}s of recording, about "
-          f"{round(total / 60) + len(clips) // 2} minutes with the pauses.")
-    print("  Watch the 'hand: YES/no' readout — if it says no, move your")
-    print("  hand until it says YES before the countdown ends.")
-    print("=" * 62 + "\n")
+    if preview:
+        print(f"\n  >>> OPEN THIS ON YOUR LAPTOP:  http://{lan_ip()}:{args.port}")
+        print("      (or http://chloespie.local:%d)\n" % args.port)
+        print("  You'll see the camera with landmarks drawn on your hand,")
+        print("  a countdown, and a red REC bar while it's capturing.")
+    print(f"\n  {len(clips)} clips, {total}s of recording.")
+    print("=" * 64 + "\n")
+
+    if preview:
+        print("Waiting for you to open that page", end="", flush=True)
+        for _ in range(60):
+            if preview.watching:
+                break
+            print(".", end="", flush=True)
+            time.sleep(1)
+        print(" connected!\n" if preview.watching
+              else "\n  (carrying on without it)\n")
 
     try:
         for i, (label, seconds, prompt) in enumerate(clips, 1):
-            print(f"--- {i}/{len(clips)}: {label} ({seconds}s) ---")
+            header = f"{i}/{len(clips)}  {label}"
+            print(f"--- {header} ({seconds}s) ---")
             if prompt:
                 print(f"     {prompt}")
+
+            rec.set_prompt(header)
             if sys.stdin.isatty():
                 input("\n  Get into position, then press ENTER. ")
-                countdown()
-            frames, hits = record(tracker, label, seconds)
-            summarise(label, frames, hits, seconds)
+                for n in (3, 2, 1):
+                    rec.set_prompt(header, count=n, mode="countdown")
+                    print(f"\r  starting in {n}...  ", end="", flush=True)
+                    time.sleep(1)
+                rec.set_prompt(header, count=0, mode="countdown")
+                print("\r  GO                 ")
+
+            rec.start(label, seconds)
+            while rec.recording:
+                with rec.lock:
+                    left = seconds - (time.perf_counter() - rec.t0)
+                    n, hand = rec.frames, rec.hand
+                print(f"\r  {left:5.1f}s left   hand: {'YES' if hand else 'no '}"
+                      f"   {n:4d} frames   ", end="", flush=True)
+                time.sleep(0.1)
+            print()
+
+            frames, hits = rec.frames, rec.hits
+            rate = 100 * hits / frames if frames else 0
+            flag = "" if rate > 80 else "   <-- LOW, consider re-recording"
+            print(f"  saved {frames} frames, {frames / seconds:.1f} fps, "
+                  f"hand in {rate:.0f}%{flag}\n")
+            rec.set_prompt("")
     finally:
+        rec.close()
         tracker.close()
+        if preview:
+            preview.close()
 
     print(f"Done. Recordings are in {OUT_DIR}/")
 
