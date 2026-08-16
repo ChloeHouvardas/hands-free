@@ -1,0 +1,7 @@
+# Install into a venv created with --system-site-packages,
+# so the apt-installed picamera2 is visible.
+#
+# Order matters: mediapipe first, then opencv, or numpy resolves wrong.
+mediapipe==0.10.35
+opencv-python==4.11.0.86
+psutil
