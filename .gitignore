@@ -2,5 +2,7 @@ venv/
 __pycache__/
 *.pyc
 
+CLAUDE.md
+
 # Model bundle — downloaded on the Pi, not checked in
 *.task
