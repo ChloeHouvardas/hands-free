@@ -226,6 +226,9 @@ def main():
     ap.add_argument("--seconds", type=int, default=20)
     ap.add_argument("--width", type=int, default=640)
     ap.add_argument("--height", type=int, default=480)
+    ap.add_argument("--rotate", type=int, default=0,
+                    choices=[0, 90, 180, 270],
+                    help="straighten a sideways-mounted camera")
     ap.add_argument("--port", type=int, default=8080)
     ap.add_argument("--no-preview", action="store_true")
     args = ap.parse_args()
@@ -236,7 +239,7 @@ def main():
     clips = SESSION if args.session else [(args.label, args.seconds, None)]
 
     print("\nStarting the camera (a few seconds)...")
-    tracker = HandTracker(args.width, args.height)
+    tracker = HandTracker(args.width, args.height, rotate=args.rotate)
     preview = None if args.no_preview else Preview(port=args.port)
     rec = Recorder(tracker, preview)
 

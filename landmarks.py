@@ -36,7 +36,20 @@ class HandTracker:
     """Camera + MediaPipe. Yields (frame, landmarks) where landmarks is a list
     of 21 normalized landmarks, or None when no hand is visible."""
 
-    def __init__(self, width=640, height=480, num_hands=1, model=MODEL):
+    # cv2 rotation codes. MediaPipe is trained on upright hands and gets
+    # noticeably worse on rotated ones, so if the camera is physically mounted
+    # sideways, straighten the frame before it ever reaches the model.
+    ROTATIONS = {
+        90: cv2.ROTATE_90_CLOCKWISE,
+        180: cv2.ROTATE_180,
+        270: cv2.ROTATE_90_COUNTERCLOCKWISE,
+    }
+
+    def __init__(self, width=640, height=480, num_hands=1, model=MODEL,
+                 rotate=0):
+        if rotate not in (0, 90, 180, 270):
+            raise ValueError("rotate must be 0, 90, 180 or 270")
+        self.rotate = self.ROTATIONS.get(rotate)
         self.picam2 = open_camera(width, height)
         self.detector = vision.HandLandmarker.create_from_options(
             vision.HandLandmarkerOptions(
@@ -50,6 +63,8 @@ class HandTracker:
     def frames(self):
         while True:
             frame = self.picam2.capture_array()
+            if self.rotate is not None:
+                frame = cv2.rotate(frame, self.rotate)
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
 
@@ -80,9 +95,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--width", type=int, default=640)
     ap.add_argument("--height", type=int, default=480)
+    ap.add_argument("--rotate", type=int, default=0,
+                    choices=[0, 90, 180, 270],
+                    help="straighten a sideways-mounted camera")
     args = ap.parse_args()
 
-    tracker = HandTracker(args.width, args.height)
+    tracker = HandTracker(args.width, args.height, rotate=args.rotate)
     last, fps = time.perf_counter(), 0.0
 
     try:
