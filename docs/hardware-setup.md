@@ -55,8 +55,14 @@ Then reconnect and accept the new fingerprint.
 cat /etc/os-release | head -2     # bookworm / Debian 12
 dpkg --print-architecture          # arm64
 python3 --version                  # 3.11.x
-libcamera-hello --timeout 2000     # camera alive
+rpicam-hello --list-cameras        # expect an IMX708 (Camera Module 3)
 ```
+
+Bookworm renamed the camera tools from `libcamera-*` to `rpicam-*`. Older guides
+still say `libcamera-hello`, which is `command not found` here.
+
+`--list-cameras` is the right check over SSH — it enumerates cameras without
+opening a preview window there's no display for.
 
 `dpkg --print-architecture` is the one that matters for pip wheels — a 64-bit
 kernel can run a 32-bit userland, so `uname -m` can mislead.
