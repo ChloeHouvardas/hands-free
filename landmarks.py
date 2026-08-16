@@ -18,23 +18,11 @@ from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python import vision
 
 from capture import open_camera
+# Constants and geometry live in hand.py, which imports nothing — so the gesture
+# layer stays usable on a machine without a camera.
+from hand import CONNECTIONS, INDEX_TIP, MIDDLE_MCP, THUMB_TIP, WRIST  # noqa: F401
 
 MODEL = "hand_landmarker.task"
-
-# Landmark indices worth naming.
-WRIST, THUMB_TIP, INDEX_TIP, MIDDLE_MCP = 0, 4, 8, 9
-
-# (start, end) pairs describing the hand skeleton. Written out rather than
-# imported from mp.solutions, which is the legacy API and takes a different
-# result type than the tasks API returns.
-CONNECTIONS = [
-    (0, 1), (1, 2), (2, 3), (3, 4),           # thumb
-    (0, 5), (5, 6), (6, 7), (7, 8),           # index
-    (5, 9), (9, 10), (10, 11), (11, 12),      # middle
-    (9, 13), (13, 14), (14, 15), (15, 16),    # ring
-    (13, 17), (17, 18), (18, 19), (19, 20),   # pinky
-    (0, 17),                                  # palm
-]
 
 
 class HandTracker:

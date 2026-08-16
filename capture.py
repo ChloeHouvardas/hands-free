@@ -14,15 +14,19 @@ import cv2
 from picamera2 import Picamera2
 
 
-def open_camera(width, height):
+def open_camera(width, height, fps=30):
     picam2 = Picamera2()
     # Despite the name, picamera2's "RGB888" hands back arrays in BGR order,
     # which is what OpenCV wants. Converting for MediaPipe happens downstream.
-    picam2.configure(
-        picam2.create_preview_configuration(
-            main={"size": (width, height), "format": "RGB888"}
-        )
+    config = picam2.create_preview_configuration(
+        main={"size": (width, height), "format": "RGB888"}
     )
+    # Without an explicit limit the camera settles around 19fps. It makes no
+    # difference to throughput (MediaPipe is the bottleneck at ~125ms/frame),
+    # but it does cap how fresh a frame can be when we ask for one.
+    frame_us = int(1e6 / fps)
+    config["controls"] = {"FrameDurationLimits": (frame_us, frame_us)}
+    picam2.configure(config)
     picam2.start()
     time.sleep(1)  # let auto-exposure settle
     return picam2
