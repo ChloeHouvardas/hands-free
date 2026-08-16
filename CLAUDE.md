@@ -7,6 +7,8 @@
   don't need a check-in.
 - When a tech decision comes up, evaluate multiple candidates before
   recommending — name the alternatives and why they lost, then recommend one.
-- When a tech choice is settled, add a row to `field-notes/decisions.md`. Leave
-  the other docs alone unless asked.
+- When a tech choice is settled, add a row to `docs/field-notes/decisions.md`.
+  Leave the other docs alone unless asked.
 - Docs record what we've decided or built, not what we considered.
+- Conventional commits: `type: subject`, imperative, lowercase subject.
+  Types used here: `feat`, `fix`, `docs`, `refactor`, `chore`.
