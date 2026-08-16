@@ -29,8 +29,9 @@ Setup — two known reasons the official
 [Pi sample](https://github.com/google-ai-edge/mediapipe-samples/tree/main/examples/gesture_recognizer/raspberry_pi)
 fails, stacked:
 
-- **Pin `mediapipe==0.10.35`.** MediaPipe went 0.10.x → 1.0.x; the samples still
-  target 0.10 and break on the new API
+- **Pin `mediapipe==0.10.18`.** Last 0.10.x with an aarch64 Linux wheel —
+  0.10.20 through 0.10.35 are x86_64 only. aarch64 returns at 1.0.x, but the
+  samples target the 0.10 API
 - **Capture with `picamera2`, not `cv2.VideoCapture`** — the sample assumes a USB
   webcam; Camera Module 3 is CSI/libcamera and OpenCV can't see it
 - venv needs `--system-site-packages` (picamera2 is apt, MediaPipe is pip)

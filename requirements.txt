@@ -2,6 +2,10 @@
 # so the apt-installed picamera2 is visible.
 #
 # Order matters: mediapipe first, then opencv, or numpy resolves wrong.
-mediapipe==0.10.35
+#
+# 0.10.18 is the LAST 0.10.x with an aarch64 Linux wheel. 0.10.20 through
+# 0.10.35 are x86_64/macOS/Windows only and will not install on a Pi.
+# aarch64 returns at 1.0.0, but the samples and docs target the 0.10 API.
+mediapipe==0.10.18
 opencv-python==4.11.0.86
 psutil
