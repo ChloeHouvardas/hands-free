@@ -1,5 +1,6 @@
 # Docs
 
+- [hardware-setup.md](hardware-setup.md) — flashing the Pi, camera, SSH, Pi Connect
 - [field-notes/architecture.md](field-notes/architecture.md) — the system, and the order we build it in
 - [field-notes/scope.md](field-notes/scope.md) — v1 goal and phases
 - [field-notes/decisions.md](field-notes/decisions.md) — tech choices and why
