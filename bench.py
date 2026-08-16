@@ -30,12 +30,37 @@ def run(width, height, seconds, num_hands):
 
     latencies, tip_positions = [], []
     frames = 0
-    deadline = time.perf_counter() + seconds
-    start = time.perf_counter()
+    start = deadline = None
+    reported = 0.0
+    seen = 0  # consecutive frames with a hand, used to arm the run
+    give_up = time.perf_counter() + 60
 
     try:
         for frame, landmarks in tracker.frames():
             t = time.perf_counter()
+
+            if start is None and t > give_up:
+                raise RuntimeError(
+                    f"no hand detected in 60s at {width}x{height} — "
+                    "check framing with landmarks.py over screen share"
+                )
+
+            # Don't start measuring until a hand has been visible for a few
+            # frames — otherwise the numbers include you fumbling into frame.
+            if start is None:
+                seen = seen + 1 if landmarks else 0
+                print(
+                    f"\r  {width}x{height}  position your hand — "
+                    f"{'holding ' + str(seen) if landmarks else 'no hand in frame'}   ",
+                    end="", flush=True,
+                )
+                if seen >= 10:
+                    start = t
+                    deadline = t + seconds
+                    proc.cpu_percent()  # reset, discard warm-up CPU
+                    print()
+                continue
+
             if frames:  # skip the first frame, it includes warm-up
                 latencies.append((t - last) * 1000)
             last = t
@@ -45,8 +70,21 @@ def run(width, height, seconds, num_hands):
                 tip = landmarks[INDEX_TIP]
                 tip_positions.append((tip.x * width, tip.y * height))
 
+            # Headless, so this line is the only way to tell whether your hand
+            # is actually in frame. Once a second is free.
+            if t - reported >= 1.0:
+                reported = t
+                elapsed = t - start
+                print(
+                    f"\r  {width}x{height}  {elapsed:4.0f}/{seconds}s  "
+                    f"hand: {'YES' if landmarks else 'no ' }  "
+                    f"{frames / elapsed:5.1f} fps   ",
+                    end="", flush=True,
+                )
+
             if t > deadline:
                 break
+        print()
     finally:
         cpu = proc.cpu_percent()
         tracker.close()
