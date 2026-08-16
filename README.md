@@ -4,11 +4,7 @@ A plug-in device that watches your hand and acts as a mouse. A Raspberry Pi with
 a camera runs hand tracking locally and speaks to the host as a USB HID mouse —
 no driver, no app.
 
-Early prototype.
-
-- [field-notes/architecture.md](field-notes/architecture.md) — the system, and the order we build it in
-- [field-notes/scope.md](field-notes/scope.md) — v1 goal and phases
-- [field-notes/decisions.md](field-notes/decisions.md) — tech choices and why
+Early prototype. Docs and code walkthrough: [docs/index.md](docs/index.md).
 
 ## Running it (on the Pi)
 
