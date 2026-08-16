@@ -127,8 +127,17 @@ def main():
 
     clips = SESSION if args.session else [(args.label, args.seconds, None)]
 
-    print("\nStarting the camera (a few seconds)...\n")
+    print("\nStarting the camera (a few seconds)...")
     tracker = HandTracker(args.width, args.height)
+
+    total = sum(s for _, s, _ in clips)
+    print("\n" + "=" * 62)
+    print("  Ignore the MediaPipe warnings above — they're normal.")
+    print(f"  {len(clips)} clips, {total}s of recording, about "
+          f"{round(total / 60) + len(clips) // 2} minutes with the pauses.")
+    print("  Watch the 'hand: YES/no' readout — if it says no, move your")
+    print("  hand until it says YES before the countdown ends.")
+    print("=" * 62 + "\n")
 
     try:
         for i, (label, seconds, prompt) in enumerate(clips, 1):
