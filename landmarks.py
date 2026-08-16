@@ -66,7 +66,10 @@ class HandTracker:
             yield frame, (hands[0] if hands else None)
 
     def close(self):
+        # stop() alone leaves the camera claimed, so a second HandTracker in the
+        # same process (bench.py runs two) fails to open it.
         self.picam2.stop()
+        self.picam2.close()
 
 
 def draw(frame, landmarks):
