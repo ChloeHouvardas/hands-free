@@ -46,7 +46,7 @@ from handsfree import hid
 DEFAULTS = {
     "pointer": "relative",
     "speed": 1400.0,
-    "max_step": 30,
+    "max_speed": 2600.0,
     "ease": 0.045,
     "interpolate_hz": 120.0,
     "watchdog": 1.0,
@@ -256,31 +256,51 @@ class Driver:
             step_n = (self.target[axis] - self.pos[axis]) * alpha
             self.pos[axis] += step_n
             whole, self._residue[axis] = self._quantize(
-                step_n * speed + self._residue[axis])
+                step_n * speed + self._residue[axis], dt)
             moved.append(whole)
 
         if moved[0] or moved[1]:
             self._mouse(x=moved[0], y=moved[1])
 
-    def _quantize(self, value):
-        """Split into whole units and a carried remainder, capped per report.
+    def _quantize(self, value, dt):
+        """Split into whole units and a carried remainder, capped by speed.
 
-        The carry is what stops slow hand movement rounding to zero every tick
-        and never moving at all. The cap is what stops a single bad landmark
-        frame flinging the cursor across the screen — and the clipped part goes
-        back into the carry rather than being thrown away, so the total travel
-        still comes out right, just spread over more ticks.
+        Two different remainders live here and they want opposite treatment.
+
+        The **sub-pixel fraction** must be carried, or a hand creeping across
+        the frame produces less than one unit every tick, truncates to zero,
+        and never moves at all.
+
+        The **clipped excess** must not be. Carrying it means a cap that
+        defers movement rather than refusing it: one bad landmark frame turns
+        into a cursor that keeps sliding for a second after your hand stopped,
+        and — worse — straight through an open palm, so the clutch doesn't stop
+        the cursor dead. Dropping it is what "cap" was supposed to mean.
+
+        The cap itself is a **speed**, not a per-report distance. A per-report
+        cap silently means different things at 9.5 Hz and 120 Hz, which is the
+        one thing the rest of this project is careful never to do — every other
+        threshold is in seconds or hand-sizes for exactly this reason. At 120 Hz
+        the interpolation thread moves a few units a tick and never approaches
+        it; pumped once per vision frame the same limit in pixels would clip
+        ordinary movement, which is precisely the bug this replaced.
         """
+        # Clamp the distance, then split it — not the other way around. Capping
+        # the truncated whole and dropping the remainder destroys movement
+        # slower than one unit per tick, because int(0.4) is 0 and the 0.4 that
+        # would have accumulated goes in the bin. Clamping first keeps the
+        # fraction alive, so a cap below one unit per tick still delivers its
+        # speed, just intermittently.
+        cap = float(self.cfg["max_speed"]) * dt if dt > 0 else 0.0
+        if cap and value > cap:
+            value = cap
+        elif cap and value < -cap:
+            value = -cap
+
         whole = int(value)              # truncates toward zero, which is right
-        rest = value - whole
-        cap = int(self.cfg["max_step"])
-        if cap and whole > cap:
-            rest += whole - cap
-            whole = cap
-        elif cap and whole < -cap:
-            rest += whole + cap
-            whole = -cap
-        return whole, rest
+        # Whatever the cap refused is already gone; `rest` is only ever the
+        # sub-unit fraction, so it can't accumulate into a backlog.
+        return whole, value - whole
 
     def _pump_absolute(self, dt):
         alpha = self._ease(dt)

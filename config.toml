@@ -114,10 +114,20 @@ pointer = "relative"
 # Interacts with [cursor] gain, which decides how much hand travel that takes.
 # Higher = faster and coarser.
 speed = 1400
-# Cap on a single report, in those same pixels. One bad landmark frame must not
-# be able to fling the cursor across the screen. The clipped part isn't thrown
-# away, it's carried into the next tick, so real fast movement still arrives.
-max_step = 30
+# Ceiling on cursor speed, in those same pixels per second. One bad landmark
+# frame must not be able to fling the cursor across the screen.
+#
+# A speed, not a per-report distance, because a per-report cap quietly means
+# different things at 9.5 fps and 120 Hz — and the first version of this was a
+# flat 30 px/report, which never bound at 120 Hz and clipped perfectly ordinary
+# movement whenever the driver was pumped once per vision frame. Everything
+# else in this file is in seconds or hand-sizes for the same reason.
+#
+# Whatever the cap refuses is discarded, not deferred. Carrying it would make
+# one bad frame into a cursor that slides for a second after your hand stopped,
+# and keeps sliding through an open palm — which would mean the clutch no
+# longer stops the cursor dead.
+max_speed = 2600
 
 # The interpolation thread. The vision loop sets a new target about nine times
 # a second; sending those straight through gives a cursor that arrives in 110ms

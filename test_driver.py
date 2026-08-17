@@ -250,7 +250,7 @@ def test_the_ceiling_is_what_saves_the_drag_recording():
 def test_the_deltas_add_up_to_the_travel_requested():
     """Interpolation may spread movement over many reports, but it must not
     invent or lose any."""
-    driver, transport, clock = build(speed=1000.0, ease=0.02, max_step=1000)
+    driver, transport, clock = build(speed=1000.0, ease=0.02, max_speed=1e9)
     driver.handle([Event("cursor", (0.9, 0.5))])
     run(driver, clock, 2.0)
     # 0.5 -> 0.9 of a 1000px space is 400px.
@@ -271,22 +271,44 @@ def test_slow_movement_is_not_rounded_away_to_nothing():
 
 @test
 def test_one_bad_frame_cannot_fling_the_cursor():
-    driver, transport, clock = build(speed=100000.0, max_step=30, ease=0.0)
+    """The cap is a speed, so what it permits scales with the tick length."""
+    hz = 120.0
+    driver, transport, clock = build(speed=100000.0, max_speed=3000.0, ease=0.0)
     driver.handle([Event("cursor", (1.0, 1.0))])
-    run(driver, clock, 0.05)
+    run(driver, clock, 0.05, hz=hz)
     steps = [int.from_bytes(r[1:3], "little", signed=True)
              for kind, r in transport.sent if kind == "mouse"]
-    assert steps and max(abs(s) for s in steps) <= 30, max(steps)
+    per_tick = 3000.0 / hz
+    assert steps, "nothing moved at all"
+    assert max(abs(s) for s in steps) <= per_tick + 1, \
+        f"a single report moved {max(abs(s) for s in steps)}, cap is {per_tick}"
 
 
 @test
-def test_a_capped_step_is_deferred_not_discarded():
-    """The clipped remainder has to come out on later ticks, or a fast sweep
-    silently travels less far than the hand did."""
-    driver, transport, clock = build(speed=1000.0, max_step=5, ease=0.0)
-    driver.handle([Event("cursor", (0.6, 0.5))])   # 100px at 1000px/unit
-    run(driver, clock, 1.0)
-    assert abs(travel(transport, 0) - 100) <= 1, travel(transport, 0)
+def test_a_capped_step_is_discarded_not_deferred():
+    """The opposite of what this used to assert, and the fix for a real bug.
+
+    Carrying the clipped part meant a cap that only *delayed* a fling: the
+    cursor kept sliding after the hand stopped, and kept sliding through an
+    open palm, so parking didn't stop it dead. A cap has to refuse movement,
+    not postpone it.
+    """
+    # ease=0 makes the whole jump land in a single tick, which is what a bad
+    # landmark frame looks like. 600 px/s at 120 Hz permits 5 px of it.
+    driver, transport, clock = build(speed=1000.0, max_speed=600.0, ease=0.0)
+    driver.handle([Event("cursor", (0.6, 0.5))])   # asks for 100px at once
+    run(driver, clock, 0.2, hz=120.0)
+    moved = travel(transport, 0)
+    assert 0 < moved <= 6, \
+        f"expected the cap to allow ~5px and refuse the rest, got {moved}"
+
+    # And the 95px it refused must be gone, not queued. A cap that defers is
+    # a cursor that slides for a second after your hand stopped — and slides
+    # straight through an open palm, so parking stops meaning anything.
+    before = len(transport.sent)
+    run(driver, clock, 2.0, hz=120.0)
+    assert len(transport.sent) == before, \
+        f"{len(transport.sent) - before} more report(s) — a backlog is draining"
 
 
 @test
