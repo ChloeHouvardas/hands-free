@@ -22,10 +22,16 @@ drift out of sync.
 import argparse
 import json
 import math
+import os
 import sys
 import time
 
-from handsfree import hid
+# Running a script inside tools/ puts tools/ on the import path, not the repo
+# root, so `handsfree` isn't importable without this. Everything else in the
+# project is run as `python3 -m handsfree ...` from the root and never hits it.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from handsfree import hid                                        # noqa: E402
 
 
 class Emitter:
