@@ -562,6 +562,13 @@ def main():
         except AssertionError as e:
             failed.append(fn.__name__)
             print(f"  FAIL  {fn.__name__}\n          {e}")
+        except Exception as e:
+            # A test that raises rather than asserts is a broken test, not a
+            # failing one — usually a rename or a moved import. Catch it here
+            # or the first one aborts the run and the other 35 results are lost.
+            failed.append(fn.__name__)
+            print(f"  ERROR {fn.__name__}\n          "
+                  f"{type(e).__name__}: {e}")
     print(f"\n{len(TESTS) - len(failed)}/{len(TESTS)} pass")
     raise SystemExit(1 if failed else 0)
 
