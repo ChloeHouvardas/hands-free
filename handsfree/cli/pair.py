@@ -22,15 +22,24 @@ from handsfree.config import load_config
 OVERRIDE = "/etc/systemd/system/bluetooth.service.d/override.conf"
 MAIN_CONF = "/etc/bluetooth/main.conf"
 
-OVERRIDE_BODY = """[Service]
+#: Plugins to drop. `input` is the one that must go — it's BlueZ's HID *host*
+#: and it holds L2CAP PSM 17 and 19, so while it's loaded our bind fails with
+#: EADDRINUSE. The rest are hygiene: leaving a2dp/avrcp/midi/health enabled
+#: makes the Pi advertise Audio Source, Audio Sink, AVRCP and Hands-Free
+#: records alongside HID, and macOS then files the device under Sound and
+#: negotiates audio instead of input. This is a mouse, not a speaker.
+NOPLUGIN = "input,a2dp,avrcp,midi,health"
+
+OVERRIDE_BODY = f"""[Service]
 # Written by `python3 -m handsfree pair --setup`.
 #
-# --compat exposes the deprecated SDP socket. -P input drops BlueZ's HID *host*
-# plugin, which otherwise holds L2CAP PSM 17 and 19 and makes our bind fail
-# with EADDRINUSE. Cost of that: this Pi can no longer use Bluetooth mice or
-# keyboards itself. It is one now.
+# --compat exposes the deprecated SDP socket, which is how `sdptool` (and so
+# `pair --check`) can read back what we're actually advertising.
+#
+# -P drops plugins. Cost of dropping `input`: this Pi can no longer use
+# Bluetooth mice or keyboards itself. It is one now.
 ExecStart=
-ExecStart=/usr/libexec/bluetooth/bluetoothd --compat -P input
+ExecStart=/usr/libexec/bluetooth/bluetoothd --compat -P {NOPLUGIN}
 """
 
 
@@ -97,8 +106,9 @@ def check():
                               text=True).stdout
     except FileNotFoundError:
         argv = ""
-    line("-P input" in argv, "bluetoothd has the input plugin disabled",
-         "" if "-P input" in argv else "run with --setup")
+    line(f"-P {NOPLUGIN}" in argv,
+         "bluetoothd has the input and audio plugins disabled",
+         "" if f"-P {NOPLUGIN}" in argv else "run with --setup")
 
     klass = ""
     try:
