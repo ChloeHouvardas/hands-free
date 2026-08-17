@@ -10,18 +10,18 @@ project actually stands, what's left, and how to pick it up cold.
 
 # The code
 
-**The root holds what you run; `handsfree/` holds what you import.** The split
-that matters: nothing in the gesture layer imports anything hardware, so it can
-be worked on from a laptop with no Pi and no camera. It doesn't even need
-numpy — the whole gesture layer is standard library only.
+All the code lives in `handsfree/`. The split that matters: nothing in the
+gesture layer imports anything hardware, so it can be worked on from a laptop
+with no Pi and no camera. It doesn't even need numpy — the whole gesture layer
+is standard library only.
 
 ```
 handsfree/
+  __main__.py                                             the one entry point
   config.py  hand.py  filters.py  gestures.py  synth.py   no hardware, stdlib only
   capture.py  landmarks.py  preview.py                    camera and MediaPipe
   cli/                                                    one file per command
-gestures.py  record.py  replay.py  bench.py               shims: `python3 gestures.py`
-capture.py   landmarks.py  test_gestures.py
+test_gestures.py                                          run it directly
 config.toml                                               every threshold
 ```
 
@@ -49,7 +49,7 @@ handsfree.hand, handsfree.filters ← handsfree.gestures ← cli.replay, test_ge
 On the Pi. The camera angle comes from `config.toml`, so no flag is needed:
 
 ```sh
-python gestures.py
+python3 -m handsfree run
 ```
 
 It prints the live-view URL; the page reconnects itself when you restart.
@@ -58,13 +58,14 @@ On the Mac, with no hardware:
 
 ```sh
 python3 test_gestures.py
-python3 replay.py 'recordings/*.jsonl' --check
+python3 -m handsfree replay 'recordings/*.jsonl' --check
 ```
 
-Run the commands from the repo root, by their root-level name. The scripts at
-the root are three-line shims into `handsfree/cli/`; running a module inside the
-package directly — `python3 handsfree/gestures.py` — does **not** work, because
-Python then puts `handsfree/` on the import path instead of the repo root.
+Everything is a subcommand of `python3 -m handsfree`; run
+`python3 -m handsfree` with no arguments for the list. Run it **from the repo
+root** — `-m` puts the working directory on the import path, so from anywhere
+else Python can't find the package. Running a file inside the package directly,
+`python3 handsfree/cli/run.py`, does not work either, for the same reason.
 
 ## Things that will bite
 

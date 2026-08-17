@@ -17,9 +17,10 @@ pip install -r requirements.txt
 wget -O hand_landmarker.task \
   https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task
 
-python capture.py      # camera only
-python landmarks.py    # 21 landmarks drawn
-python bench.py        # FPS, latency, CPU, jitter
-python gestures.py     # pinch events on stdout
+python3 -m handsfree            # the list of commands
+python3 -m handsfree capture    # camera only
+python3 -m handsfree landmarks  # 21 landmarks drawn
+python3 -m handsfree bench      # FPS, latency, CPU, jitter
+python3 -m handsfree run        # gesture events on stdout
 ```
 

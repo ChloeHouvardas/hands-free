@@ -5,19 +5,18 @@ every time. Record once, replay forever.
 
 Guided session (what you want the first time):
 
-    python record.py --session
+    python3 -m handsfree record --session
 
 Then open http://<pi>:8080 on your laptop to see what the camera sees.
 
 Single clip:
 
-    python record.py --label pinch --seconds 15
+    python3 -m handsfree record --label pinch --seconds 15
 
 Output goes to recordings/<label>.jsonl. First line is a header; every line
 after is one frame.
 """
 
-import argparse
 import json
 import os
 import sys
@@ -26,6 +25,7 @@ import time
 
 import cv2
 
+from handsfree.cli import parser
 from handsfree.landmarks import HandTracker, draw
 from handsfree.config import ROOT, rotation
 from handsfree.preview import Preview, lan_ip
@@ -209,7 +209,7 @@ class Recorder:
 
 
 def main():
-    ap = argparse.ArgumentParser()
+    ap = parser("record")
     ap.add_argument("--session", action="store_true",
                     help="guided run through every clip we need")
     ap.add_argument("--label", help="record a single clip with this name")

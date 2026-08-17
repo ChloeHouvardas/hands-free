@@ -1,19 +1,19 @@
 """Draw the 21 landmarks on the live camera view.
 
-    python landmarks.py
+    python3 -m handsfree landmarks
 """
 
-import argparse
 import time
 
 import cv2
 
+from handsfree.cli import parser
 from handsfree.config import rotation
 from handsfree.landmarks import HandTracker, draw
 
 
 def main():
-    ap = argparse.ArgumentParser()
+    ap = parser("landmarks")
     ap.add_argument("--width", type=int, default=640)
     ap.add_argument("--height", type=int, default=480)
     ap.add_argument("--rotate", type=int, default=None,

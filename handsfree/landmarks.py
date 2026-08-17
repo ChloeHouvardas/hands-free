@@ -3,7 +3,7 @@
 `HandTracker` is the shared camera+MediaPipe object used by bench.py,
 gestures.py and record.py.
 
-    python landmarks.py
+    python3 -m handsfree landmarks
 
 Needs hand_landmarker.task in the repo root:
     wget -O hand_landmarker.task \\

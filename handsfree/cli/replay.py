@@ -3,9 +3,9 @@
 This is the tuning loop, and it's the reason Phase A existed. Change a
 threshold, rerun this, see exactly what moved — no camera, no Pi, no hand.
 
-    python replay.py recordings/pinch.jsonl
-    python replay.py recordings/*.jsonl --check    # pass/fail against EXPECT
-    python replay.py recordings/*.jsonl --drop 2   # simulate a slower Pi
+    python3 -m handsfree replay recordings/pinch.jsonl
+    python3 -m handsfree replay recordings/*.jsonl --check    # pass/fail against EXPECT
+    python3 -m handsfree replay recordings/*.jsonl --drop 2   # simulate a slower Pi
 
 `--check` is the one that matters. Each clip was recorded doing a known thing,
 so we know roughly what should come out and — just as importantly — what
@@ -13,12 +13,12 @@ shouldn't. `nothing.jsonl` is the control: a hand pottering about that must
 produce no clicks, no scrolls and no swipes.
 """
 
-import argparse
 import glob
 import json
 import os
 from types import SimpleNamespace
 
+from handsfree.cli import parser
 from handsfree.gestures import GestureEngine
 
 # clip -> {event: (min, max)}. None as a bound means don't care.
@@ -112,7 +112,7 @@ def check(label, counts):
 
 
 def main():
-    ap = argparse.ArgumentParser()
+    ap = parser("replay")
     ap.add_argument("paths", nargs="+")
     ap.add_argument("--drop", type=int, default=0,
                     help="skip N of every N+1 frames, to simulate a slower Pi")

@@ -3,8 +3,8 @@
 Proves the picamera2 path works on its own, so that when MediaPipe misbehaves
 later it's unambiguous which half is at fault.
 
-    python capture.py
-    python capture.py --width 320 --height 240
+    python3 -m handsfree capture
+    python3 -m handsfree capture --width 320 --height 240
 """
 
 import os

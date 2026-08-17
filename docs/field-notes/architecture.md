@@ -7,7 +7,7 @@ flowchart LR
         cam["Camera Module 3<br/><i>CSI ribbon</i>"]
         pc["picamera2<br/><i>frame capture</i>"]
         mp["MediaPipe Hand Landmarker<br/><i>21 landmarks</i>"]
-        gs["gestures.py<br/><i>landmark geometry</i>"]
+        gs["handsfree.gestures<br/><i>landmark geometry</i>"]
         hid["USB HID gadget<br/><i>dwc2 + ConfigFS</i>"]
         cam --> pc --> mp --> gs --> hid
     end

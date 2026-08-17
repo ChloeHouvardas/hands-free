@@ -1,17 +1,17 @@
 """The live app: camera -> landmarks -> gestures -> stdout.
 
-    python gestures.py
-    python gestures.py --rotate 90
+    python3 -m handsfree run
+    python3 -m handsfree run --rotate 90
 """
 
-import argparse
 
+from handsfree.cli import parser
 from handsfree.config import rotation
 from handsfree.gestures import GestureEngine
 
 
 def main():
-    ap = argparse.ArgumentParser()
+    ap = parser("run")
     ap.add_argument("--width", type=int, default=640)
     ap.add_argument("--height", type=int, default=480)
     ap.add_argument("--rotate", type=int, default=None, choices=[0, 90, 180, 270],

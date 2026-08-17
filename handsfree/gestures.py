@@ -34,7 +34,7 @@ Nothing here is frame-counted and nothing uses raw coordinates: every gate is
 in seconds and every threshold is an angle or a multiple of hand size. That's
 what makes it survive a frame rate that wanders and a camera mounted sideways.
 
-    python gestures.py --rotate 90
+    python3 -m handsfree run --rotate 90
 """
 
 from collections import deque

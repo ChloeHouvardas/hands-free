@@ -3,21 +3,21 @@
 Run this DISCONNECTED from Pi Connect screen share. The desktop session and its
 video encoding are real CPU on a 2GB Pi and will corrupt the results.
 
-    python bench.py                    # 640x480 and 320x240
-    python bench.py --seconds 60
+    python3 -m handsfree bench                    # 640x480 and 320x240
+    python3 -m handsfree bench --seconds 60
 
 Reports FPS, per-frame latency, CPU, and landmark jitter. Jitter is measured on
 a deliberately still hand and is the number that decides whether cursor control
 feels usable — hold your hand steady in frame for the whole run.
 """
 
-import argparse
 import statistics
 import time
 
 import numpy as np
 import psutil
 
+from handsfree.cli import parser
 from handsfree.landmarks import HandTracker, INDEX_TIP
 
 RESOLUTIONS = [(640, 480), (320, 240)]
@@ -111,7 +111,7 @@ def jitter(positions):
 
 
 def main():
-    ap = argparse.ArgumentParser()
+    ap = parser("bench")
     ap.add_argument("--seconds", type=int, default=30)
     ap.add_argument("--hands", type=int, default=1)
     args = ap.parse_args()

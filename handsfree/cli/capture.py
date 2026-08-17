@@ -1,19 +1,19 @@
 """Camera only, no ML — so it's obvious which half is at fault.
 
-    python capture.py
-    python capture.py --width 320 --height 240
+    python3 -m handsfree capture
+    python3 -m handsfree capture --width 320 --height 240
 """
 
-import argparse
 import time
 
 import cv2
 
+from handsfree.cli import parser
 from handsfree.capture import open_camera
 
 
 def main():
-    ap = argparse.ArgumentParser()
+    ap = parser("capture")
     ap.add_argument("--width", type=int, default=640)
     ap.add_argument("--height", type=int, default=480)
     args = ap.parse_args()
