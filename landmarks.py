@@ -25,10 +25,10 @@ from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python import vision
 
 from capture import open_camera
-from config import rotation
+from handsfree.config import rotation
 # Constants and geometry live in hand.py, which imports nothing — so the gesture
 # layer stays usable on a machine without a camera.
-from hand import CONNECTIONS, INDEX_TIP, MIDDLE_MCP, THUMB_TIP, WRIST  # noqa: F401
+from handsfree.hand import CONNECTIONS, INDEX_TIP, MIDDLE_MCP, THUMB_TIP, WRIST  # noqa: F401
 
 MODEL = "hand_landmarker.task"
 

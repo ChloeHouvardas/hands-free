@@ -7,7 +7,11 @@ same file without one importing the other.
 import os
 import tomllib
 
-PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.toml")
+# config.toml lives at the repo root, not in the package — it's edited by hand
+# constantly, and burying it a directory down makes it harder to find. This
+# module is handsfree/config.py, so the root is two dirnames up.
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PATH = os.path.join(ROOT, "config.toml")
 
 
 def load_config(path=PATH):

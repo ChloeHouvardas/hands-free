@@ -177,7 +177,7 @@ def main():
     import cv2
     import numpy as np
 
-    from hand import CONNECTIONS
+    from handsfree.hand import CONNECTIONS
 
     names = list(POSES)
     canvas = np.zeros((260, 240 * len(names), 3), np.uint8)

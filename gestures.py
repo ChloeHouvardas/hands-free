@@ -40,11 +40,11 @@ what makes it survive a frame rate that wanders and a camera mounted sideways.
 import argparse
 from collections import deque
 
-from hand import (FINGERS, finger_angles, hand_scale, palm_centroid,
+from handsfree.hand import (FINGERS, finger_angles, hand_scale, palm_centroid,
                   pinch_ratio, thumb_abduction)
-from filters import OneEuro2D
+from handsfree.filters import OneEuro2D
 
-from config import load_config, rotation  # noqa: F401  (re-exported)
+from handsfree.config import load_config, rotation  # noqa: F401  (re-exported)
 
 
 class Event:

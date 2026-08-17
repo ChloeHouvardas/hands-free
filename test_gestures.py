@@ -12,7 +12,7 @@ the camera is.
 import math
 import random
 
-import synth
+from handsfree import synth
 from gestures import GestureEngine, load_config
 
 
@@ -55,7 +55,7 @@ def wake(name, seconds=0.9, **kw):
 
 
 def _thumb_out(lm, cfg):
-    from hand import thumb_abduction
+    from handsfree.hand import thumb_abduction
     return thumb_abduction(lm) > cfg["fingers"]["thumb_out"]
 
 

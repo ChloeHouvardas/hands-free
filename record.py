@@ -27,7 +27,7 @@ import time
 import cv2
 
 from landmarks import HandTracker, draw
-from config import rotation
+from handsfree.config import rotation
 from preview import Preview, lan_ip
 
 OUT_DIR = "recordings"
