@@ -1,0 +1,36 @@
+# Run the whole thing at boot, so the Pi is an appliance rather than something
+# you ssh into. Not installed by default — it grabs the camera, which is
+# exactly what you don't want while you're still tuning.
+#
+#   sudo cp handsfree.service /etc/systemd/system/
+#   sudo systemctl enable --now handsfree
+#   journalctl -u handsfree -f
+#
+# Root is not optional: the Bluetooth transport listens on L2CAP PSM 17 and 19,
+# both privileged ports.
+
+[Unit]
+Description=hands-free — gesture control over Bluetooth HID
+# bluetoothd has to be up before we can register the SDP record.
+After=bluetooth.target network-online.target
+Wants=bluetooth.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/chloewashere/Code/hands-free
+# -u so journalctl shows output as it happens rather than in 4KB lumps.
+# --no-preview because Wi-Fi and Bluetooth share one antenna on a Pi 4, and
+# MJPEG to a browser is the last thing the cursor needs to compete with.
+ExecStart=/home/chloewashere/Code/hands-free/venv/bin/python -u -m handsfree run --no-preview
+
+# SIGINT rather than SIGTERM: the driver's guard releases the mouse button on
+# either, but SIGINT is the path the interactive runs take, so it's the one
+# that gets exercised.
+KillSignal=SIGINT
+TimeoutStopSec=10
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
