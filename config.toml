@@ -15,8 +15,15 @@
 # Measured: extended fingers land 160-179, curled ones 90-130.
 extend = 155.0
 curl = 138.0
+# The pinky gets a stricter bar. It's the finger people are least deliberate
+# about: a hand mid-swipe lets it drift out to ~159 degrees, while a genuinely
+# spread palm puts it at ~174. Judged by the same 155 as the others, those two
+# poses are indistinguishable — which is what made parking unreliable. When
+# they're close, PALM has to win: it's how you stop the cursor.
+pinky_extend = 166.0
+pinky_curl = 150.0
 # Thumb swung clear of the palm, in degrees. Tucked reads under 20, spread
-# near 50. Only used to tell an open palm from a three-finger swipe.
+# near 50. Either this or the pinky is enough to call a hand open.
 thumb_out = 40.0
 
 [pinch]

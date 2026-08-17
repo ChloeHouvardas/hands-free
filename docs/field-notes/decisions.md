@@ -9,7 +9,7 @@
 | Where inference runs | On the Pi | Keeps the host driverless and OS-agnostic. |
 | Cursor smoothing | One Euro filter | Varies its cutoff with speed: steady when the hand is still, no added lag when it moves. A fixed low-pass can only trade one for the other. |
 | Finger extension | Min of the PIP and DIP joint angles | Intrinsic to the finger, so it survives the camera being mounted sideways. Tip-vs-knuckle comparisons need a known "up". |
-| Open palm vs three fingers | Pinky extended **and** thumb abducted | The pinky alone isn't enough — a swiping hand lets it drift out a third of the time. |
+| Open palm vs three fingers | Pinky, with the thumb breaking ties | Pinky held to a stricter angle than the other fingers (166 vs 155): a swiping hand's pinky drifts to ~159, a spread palm sits at ~174. The thumb only votes inside that ambiguous band, and there PALM wins — parking is the clutch, so a park that doesn't take is worse than a swipe you repeat. |
 | Taking control | Only a held POINT leaves PARKED | An idle hand sits with two or three fingers half out; letting those poses engage caused nearly every false click. |
 | Scroll | Rate control from an anchor | Offset sets speed, not position, so a dropped frame costs a little speed rather than desyncing the gesture. |
 | Swipe | Travel vs the furthest point in a rolling window | A fixed anchor resets mid-gesture and misses slow swipes; the window still rejects slow drift. |

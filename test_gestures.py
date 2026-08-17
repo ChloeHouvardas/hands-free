@@ -54,6 +54,11 @@ def wake(name, seconds=0.9, **kw):
     return frames
 
 
+def _thumb_out(lm, cfg):
+    from hand import thumb_abduction
+    return thumb_abduction(lm) > cfg["fingers"]["thumb_out"]
+
+
 TESTS = []
 
 
@@ -68,7 +73,6 @@ def test(fn):
 def test_poses_classify_at_any_rotation():
     """The whole reason for using joint angles instead of coordinates."""
     from gestures import Fingers, classify
-    from hand import thumb_abduction
     cfg = load_config()
     want = {"OPEN": "PALM", "POINT": "POINT", "LAZY_POINT": "POINT",
             "TWO": "TWO", "THREE": "THREE"}
@@ -78,8 +82,7 @@ def test_poses_classify_at_any_rotation():
             f = Fingers(cfg["fingers"])
             for _ in range(3):
                 state = f.update(lm)
-            out = classify(state,
-                           thumb_abduction(lm) > cfg["fingers"]["thumb_out"])
+            out = classify(state, _thumb_out(lm, cfg))
             assert out == expect, f"{name} at {rot}deg read as {out}"
 
 
@@ -87,7 +90,6 @@ def test_poses_classify_at_any_rotation():
 def test_pose_survives_distance_and_position():
     """Thresholds are in hand-sizes, so none of this should matter."""
     from gestures import Fingers, classify
-    from hand import thumb_abduction
     cfg = load_config()
     for scale in (0.10, 0.22, 0.40):
         for x, y in ((0.2, 0.2), (0.5, 0.5), (0.85, 0.8)):
@@ -95,8 +97,7 @@ def test_pose_survives_distance_and_position():
             f = Fingers(cfg["fingers"])
             for _ in range(3):
                 state = f.update(lm)
-            out = classify(state,
-                           thumb_abduction(lm) > cfg["fingers"]["thumb_out"])
+            out = classify(state, _thumb_out(lm, cfg))
             assert out == "TWO", f"TWO at scale {scale} ({x},{y}) read as {out}"
 
 
@@ -149,6 +150,72 @@ def test_scroll_and_swipe_are_reachable_once_pointing():
     assert engine.state == "SCROLL", engine.state
     _, engine = run(wake("THREE"))
     assert engine.state == "SWIPE", engine.state
+
+
+@test
+def test_opening_your_palm_always_parks():
+    """The escape hatch has to work from every state, and from a sloppy palm.
+
+    Reported live: opening the hand was read as a three-finger swipe, or as a
+    pinch, so there was no way to stop. Parking is how you get out of anything,
+    so it has to win whenever it's ambiguous.
+    """
+    for start in ("POINT", "TWO", "THREE"):
+        frames = wake(start) + synth.hold("OPEN", 1.5)
+        events, engine = run(frames)
+        assert engine.state == "PARKED", \
+            f"from {start}: ended in {engine.state}"
+        assert count(events, "swipe") == 0, (start, names(events))
+
+    # And from a drag, where the button also has to come back up.
+    frames = wake("POINT") + synth.pinching(0.5) + synth.hold("OPEN", 1.5)
+    events, engine = run(frames)
+    assert engine.state == "PARKED", engine.state
+    assert count(events, "click_up") == 1, names(events)
+
+
+@test
+def test_a_lazy_open_palm_still_parks():
+    """Fingers not fully straight — still a park.
+
+    Either a reasonably straight pinky or a thumb clear of the palm is enough.
+    A bent pinky *and* a tucked thumb is genuinely closer to the swipe pose
+    than to an open hand, so that corner is left out on purpose.
+    """
+    for pinky, thumb in ((0.0, 15.0), (0.0, 30.0), (0.0, 50.0),
+                         (0.1, 15.0), (0.1, 50.0), (0.2, 50.0)):
+        if True:
+            frames = wake("POINT") + [
+                synth.hand(curl={"pinky": pinky, "ring": 0.1}, thumb=thumb)
+                for _ in range(16)]
+            _, engine = run(frames)
+            assert engine.state == "PARKED", \
+                f"pinky={pinky} thumb={thumb}: {engine.state}"
+
+
+@test
+def test_the_thumb_only_breaks_ties():
+    """The pinky decides palm vs swipe; the thumb only votes when it can't.
+
+    A deliberate swipe keeps the pinky folded, and that has to stay a swipe
+    even if the thumb happens to drift out — otherwise swipes get eaten. But a
+    half-straight pinky is a genuine coin flip, and there PALM wins.
+    """
+    from gestures import Fingers, classify
+    cfg = load_config()
+
+    def read(pinky_curl, thumb):
+        lm = synth.hand(curl={"pinky": pinky_curl}, thumb=thumb)
+        f = Fingers(cfg["fingers"])
+        for _ in range(3):
+            state = f.update(lm)
+        return classify(state, _thumb_out(lm, cfg), f.ambiguous("pinky"))
+
+    assert read(0.9, 50.0) == "THREE", "folded pinky must stay a swipe"
+    assert read(0.9, 10.0) == "THREE"
+    assert read(0.0, 10.0) == "PALM", "straight pinky is a palm regardless"
+    assert read(0.2, 50.0) == "PALM", "ambiguous pinky + spread thumb = palm"
+    assert read(0.2, 10.0) == "THREE", "ambiguous pinky + tucked thumb = swipe"
 
 
 @test

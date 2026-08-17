@@ -71,24 +71,43 @@ class Event:
 
 
 class Fingers:
-    """Which fingers are extended, with hysteresis so they don't chatter."""
+    """Which fingers are extended, with hysteresis so they don't chatter.
+
+    The pinky gets a stricter bar than the others. It's the shortest finger and
+    the one people are least deliberate about: a hand mid-swipe lets it drift
+    out to about 159 degrees, while a genuinely spread palm puts it at 174.
+    Judging it by the same threshold as the index makes those two poses
+    indistinguishable — which is exactly what made parking unreliable.
+    """
 
     def __init__(self, cfg):
-        self.extend = cfg["extend"]
-        self.curl = cfg["curl"]
+        self.extend = {name: cfg["extend"] for name in FINGERS}
+        self.curl = {name: cfg["curl"] for name in FINGERS}
+        self.extend["pinky"] = cfg["pinky_extend"]
+        self.curl["pinky"] = cfg["pinky_curl"]
         self.state = {name: False for name in FINGERS}
+        self.angles = {}
 
     def update(self, landmarks):
-        angles = finger_angles(landmarks)
-        for name, a in angles.items():
-            if a > self.extend:
+        self.angles = finger_angles(landmarks)
+        for name, a in self.angles.items():
+            if a > self.extend[name]:
                 self.state[name] = True
-            elif a < self.curl:
+            elif a < self.curl[name]:
                 self.state[name] = False
         return self.state
 
+    def ambiguous(self, name):
+        """True when this finger is sitting inside the hysteresis band.
 
-def classify(fingers, thumb_out):
+        Not "is it extended" but "do we actually know" — which is the honest
+        question to ask before letting another signal break the tie.
+        """
+        a = self.angles.get(name)
+        return a is not None and self.curl[name] <= a <= self.extend[name]
+
+
+def classify(fingers, thumb_out, pinky_unsure=False):
     """Finger states to a pose name.
 
     The conditions are deliberately loose in the places the recordings said
@@ -105,12 +124,19 @@ def classify(fingers, thumb_out):
     p = fingers["pinky"]
 
     if i and m and r:
-        # An open palm and a three-finger swipe differ only in the pinky, and
-        # the pinky is the least reliable landmark on the hand — a swiping hand
-        # lets it drift out about a third of the time. So PALM has to earn it
-        # twice: pinky out *and* thumb swung clear of the palm, which a swiping
-        # hand keeps tucked.
-        return "PALM" if (p and thumb_out) else "THREE"
+        # An open palm and a three-finger swipe differ only at the outside of
+        # the hand, and the pinky alone is a shaky thing to decide on. So:
+        #
+        #   pinky clearly out      -> PALM
+        #   pinky clearly curled   -> THREE, whatever the thumb is doing
+        #   pinky somewhere between -> let the thumb break the tie
+        #
+        # The thumb only gets a vote in the ambiguous band, which is what
+        # keeps a deliberate swipe from being read as a park just because the
+        # thumb drifted. And in that band PALM wins, because parking is the
+        # clutch — how you stop the cursor and get out of any mode — so a park
+        # that doesn't take is much worse than a swipe you have to repeat.
+        return "PALM" if (p or (pinky_unsure and thumb_out)) else "THREE"
     if i and m:
         return "TWO"
     if i:
@@ -221,7 +247,8 @@ class GestureEngine:
         if self.pinched and not was_pinched:
             self.pinched_since = t
         thumb_out = thumb_abduction(landmarks) > self.cfg["fingers"]["thumb_out"]
-        pose = self.pose.update(classify(fingers, thumb_out), t)
+        pose = self.pose.update(
+            classify(fingers, thumb_out, self.fingers.ambiguous("pinky")), t)
 
         events += self._transition(pose, landmarks, t, dt)
         return events
@@ -432,12 +459,12 @@ class GestureEngine:
     def _pinch(self, landmarks, fingers):
         cfg = self.cfg["pinch"]
 
-        # A hand with three fingers out isn't pinching, however close the thumb
-        # happens to be sitting to the index — and a hand resting on a desk
-        # sits exactly like that, which is where most of the false clicks in
-        # the control recording came from. Pinching pulls the ring finger in
-        # with the index; every real pinch on record has it curled.
-        if fingers["ring"] and not self.pinched:
+        # An open hand isn't pinching, however close the thumb happens to be
+        # sitting to the index — and both a hand resting on a desk and a hand
+        # opening up to park sit exactly like that. Pinching pulls the outer
+        # fingers in with the index; every real pinch on record has the ring
+        # and pinky curled.
+        if not self.pinched and (fingers["ring"] or fingers["pinky"]):
             return False
 
         ratio = pinch_ratio(landmarks)
