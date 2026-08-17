@@ -37,6 +37,7 @@ that catches a gesture layer that thinks you're still pinching.
 import atexit
 import math
 import signal
+import sys
 import threading
 import time
 
@@ -87,6 +88,7 @@ class Driver:
         self.buttons = 0
         self.drag_since = None
         self.released_by = None         # which guard fired, for the log
+        self.thread_stuck = False       # set if the cursor thread outlived close()
 
         now = clock()
         self._fed = now
@@ -141,6 +143,16 @@ class Driver:
 
         if self._thread is not None and self._thread is not threading.current_thread():
             self._thread.join(timeout=1.0)
+            # join() returns None whether it worked or timed out, so without
+            # this check a wedged loop looks exactly like a clean shutdown —
+            # in the one module whose whole promise is guards that don't trust
+            # each other. The button is already released above, so this is a
+            # leak to report rather than a danger to prevent.
+            if self._thread.is_alive():
+                self.thread_stuck = True
+                print("warning: the cursor thread did not stop within 1s",
+                      file=sys.stderr, flush=True)
+
         self.transport.close()
 
     def __enter__(self):
