@@ -1,5 +1,8 @@
 # Docs
 
+**Start here: [todos/main-sun-aug-16.md](todos/main-sun-aug-16.md)** — where the
+project actually stands, what's left, and how to pick it up cold.
+
 - [hardware-setup.md](hardware-setup.md) — flashing the Pi, camera, SSH, Pi Connect
 - [field-notes/architecture.md](field-notes/architecture.md) — the system, and the order we build it in
 - [field-notes/scope.md](field-notes/scope.md) — v1 goal and phases
@@ -7,81 +10,51 @@
 
 # The code
 
-Four files, flat by design. Dependency shape:
+Flat by design. The split that matters: nothing in the gesture layer imports
+anything hardware, so it can be worked on from a laptop with no Pi and no
+camera.
 
 ```
-capture.py ← landmarks.py ← gestures.py
-                         ← bench.py
+config.py  ← everything
+capture.py ← landmarks.py ← record.py, bench.py
+hand.py, filters.py ← gestures.py ← replay.py, test_gestures.py
 ```
 
-Nothing here has run on the Pi yet. Treat the first pass as debugging, not
-testing.
+| File | What it does |
+| --- | --- |
+| `config.py` / `config.toml` | Every threshold, and the camera mounting angle. |
+| `capture.py` | Camera only, no ML — so it's obvious which half broke. |
+| `landmarks.py` | Camera + MediaPipe → 21 landmarks, or `None`. |
+| `preview.py` | Streams the annotated view to a browser; the Pi is headless. |
+| `hand.py` | Pure geometry: joint angles, pinch ratio, hand size. Imports nothing. |
+| `filters.py` | One Euro filter — steady when still, no lag when moving. |
+| `gestures.py` | The state machine. Its docstring is the best explanation of the design. |
+| `synth.py` | Builds hands from scratch, for tests that don't need a camera. |
+| `record.py` / `replay.py` | Record landmark sessions, replay them offline. |
+| `test_gestures.py` | 36 tests over generated hands. |
+| `bench.py` | FPS, latency, CPU, jitter. |
 
-## `capture.py`
+## Running it
 
-picamera2 only, no MediaPipe. Opens the camera at a given resolution and shows a
-preview with an FPS counter.
-
-Exists so that when something breaks later you can tell whether it's the camera
-path or the ML. Exports `open_camera()`, reused by everything else.
-
-```sh
-python capture.py
-python capture.py --width 320 --height 240
-```
-
-## `landmarks.py`
-
-The core. `HandTracker` wraps camera + MediaPipe and exposes a `frames()`
-generator yielding `(frame, landmarks)` — 21 points, or `None` when no hand is
-visible. Tasks API, video mode, `num_hands=1`.
-
-Also `draw()` for the skeleton and joints. Connections are hardcoded rather than
-pulled from `mp.solutions`, which is the legacy API and expects a different
-result type than the tasks API returns.
-
-```sh
-python landmarks.py
-```
-
-## `gestures.py`
-
-Landmark geometry to events. `Pinch` measures thumb tip to index tip, divided by
-wrist-to-middle-MCP so the threshold survives the hand moving nearer or further
-from the camera.
-
-Two thresholds, not one — enters below `0.35`, releases above `0.45` — so it
-doesn't flicker when the distance sits on the boundary. Both values are guesses
-and need tuning against a real camera.
-
-Prints `PINCH_DOWN` / `PINCH_UP`. Releases rather than latching if the hand
-leaves frame mid-pinch. No mouse output yet.
+On the Pi. The camera angle comes from `config.toml`, so no flag is needed:
 
 ```sh
 python gestures.py
-python gestures.py --no-preview
 ```
 
-## `bench.py`
+It prints the live-view URL; the page reconnects itself when you restart.
 
-The Phase 1 deliverable. Runs 640×480 and 320×240 for 30s each and prints FPS,
-p50/p95 latency, CPU%, detection rate, and jitter.
-
-Jitter is mean frame-to-frame movement of the index tip. Hold your hand still
-for the run — the number that comes back is noise, and it's what decides whether
-cursor control feels usable.
-
-Run it **disconnected from Pi Connect screen share**; the desktop session is
-real CPU on a 2GB Pi and will corrupt the results.
+On the Mac, with no hardware:
 
 ```sh
-python bench.py
-python bench.py --seconds 60
+python3 test_gestures.py
+python3 replay.py 'recordings/*.jsonl' --check
 ```
 
-## Known risks in this code
+## Things that will bite
 
-- picamera2's `"RGB888"` format returns **BGR**-ordered arrays. `capture.py`
-  depends on that for OpenCV; `landmarks.py` converts to RGB before MediaPipe.
-  If the preview looks right but landmarks track badly, check this first.
-- The pinch thresholds are untuned guesses.
+- Only one process can hold the camera. "Device or resource busy" means an
+  earlier run is still alive.
+- picamera2's `"RGB888"` returns **BGR**-ordered arrays. If the preview looks
+  right but tracking is bad, check this first.
+- `mediapipe` is pinned to `0.10.18` — the last version with an aarch64 wheel.

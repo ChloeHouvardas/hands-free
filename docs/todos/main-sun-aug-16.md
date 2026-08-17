@@ -7,6 +7,104 @@ Phases A and B are done. C and D are not started.
 
 ---
 
+## Picking this up cold
+
+**This file is the entry point.** It's the current state of the project; the
+other docs are reference.
+
+### Where things are
+
+| | |
+| --- | --- |
+| Repo | `~/Documents/CODE/hands-free` on the Mac, branch `main` |
+| GitHub | `ChloeHouvardas/hands-free` (public) |
+| Pi | `ssh chloewashere@chloespie.local` (keys are set up, no password) |
+| On the Pi | `~/Code/hands-free`, venv at `venv/` — `source venv/bin/activate` |
+| Recordings | `recordings/*.jsonl`, on both machines, **gitignored** — move with `scp` |
+
+### Read in this order
+
+1. This file — state, open problems, what's next
+2. `gestures.py` module docstring — the state machine and the three rules
+3. `config.toml` — every threshold, each with a comment on why it's that value
+4. `docs/field-notes/decisions.md` — settled tech choices
+5. `docs/hardware-setup.md` — only if touching the Pi's setup
+
+### The file map
+
+```
+config.py       loads config.toml            hand.py     pure geometry, no imports
+capture.py      camera only, no ML           filters.py  one euro filter
+landmarks.py    camera + MediaPipe           gestures.py the state machine
+preview.py      browser live view            synth.py    generated hands for tests
+record.py       capture to JSONL             replay.py   JSONL back through gestures
+bench.py        FPS / latency                test_gestures.py
+```
+
+Dependency shape — `hand.py`, `filters.py`, `gestures.py`, `synth.py` and the
+tests import **nothing hardware**, which is what lets the whole gesture layer be
+worked on from a laptop:
+
+```
+config.py ← everything
+capture.py ← landmarks.py ← record.py, bench.py
+hand.py, filters.py ← gestures.py ← replay.py, test_gestures.py
+```
+
+### Working style (also in CLAUDE.md, which is gitignored)
+
+- Answer first in a sentence or two. No preamble, no recapping.
+- **Check before architectural or hard-to-reverse decisions** — inference
+  runtime, model, HID approach, language. Small libraries don't need a
+  check-in. When a tech decision comes up, name the alternatives and why they
+  lost, then recommend one.
+- When a choice is settled, add a row to `docs/field-notes/decisions.md`.
+  Leave other docs alone unless asked.
+- Docs record what we decided or built, not what we considered.
+- Conventional commits: `type: subject`, imperative, lowercase.
+  `feat` `fix` `docs` `refactor` `chore`. No co-author trailers.
+
+### The loop that makes this fast
+
+Both run on the Mac with no hardware attached. Use them after **any** threshold
+change:
+
+```sh
+python3 test_gestures.py                          # 36 synthetic
+python3 replay.py 'recordings/*.jsonl' --check    # 9 real clips
+python3 replay.py recordings/pinch.jsonl -v       # every event, timestamped
+python3 replay.py 'recordings/*.jsonl' --check --drop 1   # half frame rate
+```
+
+Recordings keep it honest about real sloppy input; `synth.py` stops it
+overfitting to one afternoon's hands. **Don't tune against only one of them** —
+that's how the first pass produced a palm that couldn't park.
+
+### Gotchas that cost time already
+
+- **Only one process can hold the camera.** "Device or resource busy" means a
+  previous run is alive: `pgrep -af 'python.*(gestures|record|landmarks)'`.
+- **`pkill -f gestures.py` over SSH kills its own shell**, because the remote
+  command line contains that string. Use `pkill -f "[g]estures.py"`, and don't
+  put it on the same line as the thing you're starting.
+- **Backgrounding over SSH needs `ssh -f` and `< /dev/null`**, or the process
+  dies when the session closes.
+- **`mediapipe==0.10.18` is pinned** — the last 0.10.x with an aarch64 wheel.
+  0.10.20–0.10.35 are x86_64 only and will not install on the Pi.
+- **Bookworm, not Trixie.** Trixie ships Python 3.13 and MediaPipe has no 3.13
+  wheel. The Pi was reflashed once over this.
+- **picamera2's `"RGB888"` returns BGR-ordered arrays.** If the preview looks
+  right but tracking is bad, check this first.
+- **Ask before pulling on the Pi.** Doing it silently makes the user's own
+  `git pull` say "already up to date", which reads like nothing was committed.
+
+### Asking the user to run something
+
+Suggest they type `! <command>` in the prompt so the output lands in the
+conversation. They test live; the agent can SSH for diagnosis.
+
+---
+
 ## The shape of it
 
 ```
