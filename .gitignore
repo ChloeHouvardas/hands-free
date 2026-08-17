@@ -2,7 +2,8 @@ venv/
 __pycache__/
 *.pyc
 
-CLAUDE.md
+# Claude config — instructions and skills, kept local
+.claude/
 
 # Model bundle — downloaded on the Pi, not checked in
 *.task
