@@ -202,17 +202,20 @@ def advertise(name="Hands-Free", pointer="relative", verbose=True):
     agent = Agent(bus, AGENT_PATH)
     manager = dbus.Interface(bus.get_object("org.bluez", "/org/bluez"),
                              "org.bluez.AgentManager1")
-    manager.RegisterAgent(AGENT_PATH, "NoInputNoOutput")
-    manager.RequestDefaultAgent(AGENT_PATH)
+    # dbus.ObjectPath, not a bare str, for the same reason the properties above
+    # are explicit variants: these signatures are `os` and `o`, and without
+    # working introspection dbus-python types them from Python and sends `ss`.
+    manager.RegisterAgent(dbus.ObjectPath(AGENT_PATH), "NoInputNoOutput")
+    manager.RequestDefaultAgent(dbus.ObjectPath(AGENT_PATH))
 
     profile = Profile(bus, PROFILE_PATH)
     pm = dbus.Interface(bus.get_object("org.bluez", "/org/bluez"),
                         "org.bluez.ProfileManager1")
     try:
-        pm.UnregisterProfile(PROFILE_PATH)     # a previous run may still own it
-    except dbus.DBusException:
+        pm.UnregisterProfile(dbus.ObjectPath(PROFILE_PATH))   # a previous run
+    except dbus.DBusException:                                 # may still own it
         pass
-    pm.RegisterProfile(PROFILE_PATH, HID_UUID, {
+    pm.RegisterProfile(dbus.ObjectPath(PROFILE_PATH), HID_UUID, {
         "ServiceRecord": service_record(name, hid.combined_descriptor(pointer)),
         "Role": "server",
         "RequireAuthentication": dbus.Boolean(False),
@@ -469,14 +472,14 @@ class Backend:
             import dbus
             root = bluez["bus"].get_object("org.bluez", "/org/bluez")
             dbus.Interface(root, "org.bluez.ProfileManager1") \
-                .UnregisterProfile(PROFILE_PATH)
+                .UnregisterProfile(dbus.ObjectPath(PROFILE_PATH))
             # The agent has to go too, and so do the exported objects. BlueZ
             # keeps the agent registered otherwise, and dbus-python refuses to
             # export a second object on the same path — so a second transport
             # in one process dies with "there is already a handler", which is
             # exactly what a test that starts and stops the wire twice does.
             dbus.Interface(root, "org.bluez.AgentManager1") \
-                .UnregisterAgent(AGENT_PATH)
+                .UnregisterAgent(dbus.ObjectPath(AGENT_PATH))
         except Exception:
             pass
         for name in ("agent", "profile"):
