@@ -342,18 +342,23 @@ class Backend:
     def close(self):
         self._closed = True
         with self._lock:
-            socks = [self._ctrl, self._intr, self._listen_ctrl,
-                     self._listen_intr]
+            # getattr, because __init__ can fail partway — binding PSM 19 after
+            # PSM 17 succeeded, say — and a close() that raises AttributeError
+            # while unwinding buries the error that actually mattered.
+            socks = [getattr(self, name, None) for name in
+                     ("_ctrl", "_intr", "_listen_ctrl", "_listen_intr")]
             self._ctrl = self._intr = None
         for sock in socks:
             try:
-                sock.close()
+                if sock is not None:
+                    sock.close()
             except OSError:
                 pass
         try:
             import dbus
             pm = dbus.Interface(
-                self.bluez["bus"].get_object("org.bluez", "/org/bluez"),
+                getattr(self, "bluez")["bus"].get_object(
+                    "org.bluez", "/org/bluez"),
                 "org.bluez.ProfileManager1")
             pm.UnregisterProfile(PROFILE_PATH)
         except Exception:
