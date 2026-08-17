@@ -3,6 +3,7 @@
 **Start here: [todos/main-sun-aug-16.md](todos/main-sun-aug-16.md)** — where the
 project actually stands, what's left, and how to pick it up cold.
 
+- [demo.md](demo.md) — running a live demo: setup, the order to show things in, what goes wrong
 - [hardware-setup.md](hardware-setup.md) — flashing the Pi, camera, SSH, Pi Connect
 - [field-notes/architecture.md](field-notes/architecture.md) — the system, and the order we build it in
 - [field-notes/scope.md](field-notes/scope.md) — v1 goal and phases
@@ -57,6 +58,7 @@ side. All the byte-level and timing logic is testable on a laptop; only
 | `handsfree/transport/` | Where reports go: Bluetooth, USB, or `null` (prints them). |
 | `handsfree/sources.py` | Where frames come from: the camera, a recording, or generated hands. |
 | `handsfree/scripts.py` | Scripted sessions, each carrying what it's supposed to produce. |
+| `handsfree/cli/doctor.py` | Vision health: drops per minute, frame time, jitter, whether exposure is still hunting. |
 | `handsfree/cli/` | The `main()` for each command. Everything that touches hardware lives here. |
 | `test_gestures.py` | 36 tests over generated hands. Stays at the root so `python3 test_gestures.py` works. |
 | `test_hid.py` | 18 tests. Parses each descriptor back and checks it describes the report we send. |
