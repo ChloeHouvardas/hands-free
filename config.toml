@@ -71,6 +71,13 @@ exit = 0.70
 # difference between two and three fingers is a few degrees. A real pinch only
 # lasts 2-4 frames at 10 fps, so anything longer than this drops half of them.
 dwell = 0.06
+# A pinch keeps the index out. Below this angle the hand is closing into a
+# fist, and a fist brings the thumb just as near the index as a pinch does —
+# the ratio genuinely cannot tell them apart, which is where the false clicks
+# came from. Measured: real pinches sit at 165-175 degrees; the false ones in
+# nothing.jsonl were 95-154. 150 keeps 15 degrees of margin under every real
+# pinch on record while removing every false one.
+index_out = 150.0
 
 [pose]
 # How long a pose must hold before we believe it. At ~10 fps this is 2-3

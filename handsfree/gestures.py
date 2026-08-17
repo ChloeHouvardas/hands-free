@@ -465,6 +465,15 @@ class GestureEngine:
         if not self.pinched and (fingers["ring"] or fingers["pinky"]):
             return False
 
+        # And a pinch keeps the index *out*. A hand closing into a fist brings
+        # the thumb just as close to the index as a pinch does, so the ratio
+        # cannot separate them — which is exactly where the idle false clicks
+        # came from: four fingers collapsing at once, read as a deliberate
+        # pinch. Real pinches on record hold the index at 165-175 degrees.
+        if not self.pinched:
+            if self.fingers.angles.get("index", 180.0) < cfg["index_out"]:
+                return False
+
         ratio = pinch_ratio(landmarks)
         if self.pinched:
             return ratio <= cfg["exit"]
