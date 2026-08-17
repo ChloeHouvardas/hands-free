@@ -26,6 +26,12 @@ def main():
                     help="override [hid] backend in config.toml")
     ap.add_argument("--pointer", choices=("relative", "absolute"), default=None,
                     help="override [hid] pointer in config.toml")
+    ap.add_argument("--swipe-keys", default=None, metavar="LEFT,RIGHT",
+                    help="override the swipe shortcuts, e.g. "
+                         "shift+left,shift+right. Ctrl+arrow is taken by "
+                         "Mission Control before any app sees it, which is "
+                         "the point of it — but also means you can't watch it "
+                         "arrive anywhere.")
     ap.add_argument("--source", default="camera",
                     help="camera | replay:<path> | synth:<script> — where "
                          "frames come from. The fakes need no camera at all.")
@@ -47,6 +53,10 @@ def main():
     hid_cfg = dict(cfg.get("hid", {}))
     if args.pointer:
         hid_cfg["pointer"] = args.pointer
+    if args.swipe_keys:
+        left, _, right = args.swipe_keys.partition(",")
+        hid_cfg["swipe_left"] = left.strip()
+        hid_cfg["swipe_right"] = right.strip() or left.strip()
     backend = args.transport or hid_cfg.get("backend", "null")
 
     # `sources.open` pulls in the camera stack only for --source camera, so a
