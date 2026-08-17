@@ -103,6 +103,28 @@ def service_record(name, descriptor):
 """
 
 
+#: One GLib main loop for the whole process, started on first use.
+#:
+#: It used to be one per `advertise()` call, each on its own thread and never
+#: stopped — so every transport that was brought up and torn down left a live
+#: loop behind, and enough cycles exhausted the process's file descriptors
+#: outright ("Too many open files"). Running several main loops against the
+#: same default context is wrong regardless of the leak; there is only ever one
+#: bus to service.
+_LOOP = None
+_LOOP_LOCK = threading.Lock()
+
+
+def _mainloop(GLib):
+    global _LOOP
+    with _LOOP_LOCK:
+        if _LOOP is None:
+            _LOOP = GLib.MainLoop()
+            threading.Thread(target=_LOOP.run, daemon=True,
+                             name="bluez-dbus").start()
+        return _LOOP
+
+
 def _dbus():
     """Import D-Bus late, so this module can at least be read on a laptop."""
     import dbus
@@ -223,8 +245,7 @@ def advertise(name="Hands-Free", pointer="relative", verbose=True):
         "AutoConnect": dbus.Boolean(True),
     })
 
-    loop = GLib.MainLoop()
-    threading.Thread(target=loop.run, daemon=True, name="bluez-dbus").start()
+    loop = _mainloop(GLib)
 
     address = str(props.Get("org.bluez.Adapter1", "Address"))
     klass = int(props.Get("org.bluez.Adapter1", "Class"))
