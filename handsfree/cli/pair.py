@@ -165,8 +165,10 @@ def main():
                     help="report what's wrong and exit")
     ap.add_argument("--name", default=None,
                     help="override the name the Mac sees")
-    ap.add_argument("--timeout", type=float, default=None,
-                    help="give up waiting after this many seconds")
+    ap.add_argument("--timeout", type=float, default=30.0,
+                    help="how often to report that it's still waiting")
+    ap.add_argument("--once", action="store_true",
+                    help="give up after one timeout instead of waiting")
     args = ap.parse_args()
 
     if args.setup:
@@ -196,10 +198,18 @@ def main():
           f"  On the Mac: System Settings > Bluetooth, and pair it.\n")
 
     try:
-        if not transport.wait_for_host(args.timeout):
-            print("  Nothing connected. Still advertising — leave this "
-                  "running and try the Mac again.", file=sys.stderr)
-            return 1
+        # Keep waiting rather than giving up. Exiting here closes the
+        # transport, which deregisters the pairing agent — and a macOS that is
+        # midway through pairing then sits forever on "waiting for Hands-Free
+        # to accept", because there is no longer anything on this end able to
+        # accept. Timing out during the one operation that needs a human is
+        # exactly the wrong moment to tear down.
+        while not transport.wait_for_host(args.timeout):
+            if args.timeout:
+                print("  Still advertising, still waiting. Ctrl-C to stop.",
+                      file=sys.stderr, flush=True)
+            if args.once:
+                return 1
 
         print("\n  Paired and connected. Moving the cursor in a square so you "
               "can see it works.\n")
