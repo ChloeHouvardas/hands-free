@@ -253,6 +253,20 @@ def test_the_two_backends_disagree_about_report_ids_on_purpose():
     assert usb.Backend.keyboard_id is None
 
 
+@test
+def test_the_service_record_embeds_the_descriptor_we_generate():
+    """Portable half of the same question the Pi asks over the air: the XML we
+    hand BlueZ has to actually contain our descriptor, in attribute 0x0206."""
+    from handsfree.transport.bluetooth import service_record
+
+    for pointer in hid.POINTERS:
+        desc = hid.combined_descriptor(pointer)
+        record = service_record("Hands-Free", desc)
+        assert desc.hex() in record, f"{pointer} descriptor missing from the record"
+        assert 'id="0x0206"' in record, "no HIDDescriptorList attribute"
+        assert 'value="0x1124"' in record, "not declared as a HID service"
+
+
 # -- the factory ------------------------------------------------------------
 
 @test
@@ -279,10 +293,17 @@ def test_the_null_backend_needs_nothing_at_all():
 
 # -- the Pi-only half -------------------------------------------------------
 
-def sdp_records():
-    """What we're advertising right now, as sdptool sees it."""
-    return subprocess.run(["sdptool", "browse", "local"],
-                          capture_output=True, text=True).stdout
+def sdp_records(xml=False):
+    """What we're advertising right now, as sdptool sees it.
+
+    `--xml` is the only form that includes the raw HID descriptor blob —
+    plain `browse` prints the parsed attributes and drops attribute 0x0206
+    entirely, so a descriptor check against it can never succeed.
+    """
+    argv = ["sdptool", "browse", "local"]
+    if xml:
+        argv.insert(2, "--xml")
+    return subprocess.run(argv, capture_output=True, text=True).stdout
 
 
 class Advertising:
@@ -322,7 +343,7 @@ def test_the_published_descriptor_is_the_one_we_generate():
     if os.geteuid() != 0:
         raise AssertionError("needs root")
     with Advertising():
-        out = sdp_records()
+        out = sdp_records(xml=True)
     flat = out.replace(" ", "").replace("\n", "").lower()
     for pointer in hid.POINTERS:
         if hid.combined_descriptor(pointer).hex() in flat:
