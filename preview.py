@@ -39,17 +39,50 @@ PAGE = """<!doctype html>
 <title>hands-free</title>
 <style>
   body { margin:0; background:#111; color:#eee; font:14px system-ui;
-         display:flex; flex-direction:column; align-items:center; gap:12px;
+         display:flex; flex-direction:column; align-items:center; gap:10px;
          padding:16px; }
-  img { max-width:100%; border-radius:8px; }
+  img { max-width:100%; border-radius:8px; background:#000; min-height:120px; }
+  #s { font-size:13px; color:#888; }
+  #s.live { color:#4c4; }
+  #s.down { color:#c66; }
 </style>
 <h3>hands-free &mdash; live view</h3>
-<img src="/stream">
+<div id="s">connecting&hellip;</div>
+<img id="v" alt="">
+<script>
+// The stream dies whenever the script on the Pi restarts, and a browser will
+// not re-request a broken <img> on its own — which meant every restart looked
+// like a broken camera until you knew to hard-reload. So reconnect ourselves.
+var img = document.getElementById('v');
+var s = document.getElementById('s');
+var tries = 0;
+
+function connect() {
+  s.textContent = tries ? 'reconnecting\\u2026' : 'connecting\\u2026';
+  s.className = tries ? 'down' : '';
+  img.src = '/stream?t=' + Date.now();   // fresh url, never a cached failure
+}
+img.onerror = function () {
+  tries++;
+  setTimeout(connect, 700);              // the Pi is probably mid-restart
+};
+img.onload = function () {
+  tries = 0;
+  s.textContent = 'live';
+  s.className = 'live';
+};
+img.onclick = connect;                   // manual nudge, just in case
+connect();
+</script>
 """.encode("utf-8")
 
 
 class _Handler(BaseHTTPRequestHandler):
     def do_GET(self):
+        # The page appends a timestamp to bust the cache on reconnect, so the
+        # query string has to come off before matching.
+        self.path = self.path.split("?", 1)[0]
+
         if self.path == "/":
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
@@ -112,7 +145,15 @@ class Preview:
         self.port = port
         self.quality = quality
         self.state = _State()
-        self.server = ThreadingHTTPServer(("0.0.0.0", port), _Handler)
+        try:
+            self.server = ThreadingHTTPServer(("0.0.0.0", port), _Handler)
+        except OSError as e:
+            raise SystemExit(
+                f"\nCan't listen on port {port}: {e}\n"
+                f"Something is already running. Find it with:\n"
+                f"    pgrep -af 'python.*gestures'\n"
+                f"and stop it, or pass --port to use a different one.\n"
+            ) from None
         self.server.state = self.state
         self.server.daemon_threads = True
         threading.Thread(target=self.server.serve_forever, daemon=True).start()

@@ -22,7 +22,17 @@ from picamera2 import Picamera2
 
 
 def open_camera(width, height, fps=30):
-    picam2 = Picamera2()
+    try:
+        picam2 = Picamera2()
+    except RuntimeError as e:
+        # Almost always a previous run that didn't exit. The raw error talks
+        # about acquisition sequences and tells you nothing useful.
+        raise SystemExit(
+            f"\nCan't open the camera: {e}\n"
+            f"Usually an earlier run is still holding it. Check with:\n"
+            f"    pgrep -af 'python.*(gestures|record|landmarks|capture)'\n"
+            f"and stop it before starting another.\n"
+        ) from None
     # Despite the name, picamera2's "RGB888" hands back arrays in BGR order,
     # which is what OpenCV wants. Converting for MediaPipe happens downstream.
     config = picam2.create_preview_configuration(
