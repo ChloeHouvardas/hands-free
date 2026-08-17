@@ -27,10 +27,12 @@ import time
 import cv2
 
 from handsfree.landmarks import HandTracker, draw
-from handsfree.config import rotation
+from handsfree.config import ROOT, rotation
 from handsfree.preview import Preview, lan_ip
 
-OUT_DIR = "recordings"
+# Anchored to the repo root, not the working directory, so a session started
+# from anywhere still writes its clips where replay.py expects to find them.
+OUT_DIR = os.path.join(ROOT, "recordings")
 
 # label, seconds, what to tell the person holding the hand
 SESSION = [
