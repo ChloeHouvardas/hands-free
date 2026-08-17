@@ -13,9 +13,8 @@ enabled with nobody watching costs nothing.
 
 import socket
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-
-import cv2
 
 
 def lan_ip():
@@ -110,9 +109,32 @@ class _Handler(BaseHTTPRequestHandler):
             last = None
             while True:
                 with state.lock:
-                    while state.seq == last:
-                        state.changed.wait(timeout=5)
-                    last, jpeg = state.seq, state.jpeg
+                    # `closing` has to be part of the predicate, not just
+                    # checked afterwards: wait_for() re-tests its predicate on
+                    # every notify and goes straight back to sleep for the
+                    # remaining timeout if it's still false. Waking a waiter
+                    # that then ignores you is the same as not waking it.
+                    state.changed.wait_for(
+                        lambda: state.seq != last or state.closing, timeout=5)
+                    if state.closing:
+                        break
+                    fresh = state.seq != last
+                    if fresh:
+                        last, jpeg = state.seq, state.jpeg
+
+                if not fresh:
+                    # Nothing published for five seconds. Touch the socket
+                    # anyway: a viewer that closed its laptop lid never sends
+                    # us anything, so the *only* way we learn it's gone is a
+                    # write failing. Without this the handler blocks here
+                    # forever, `clients` never drops back to zero, `watching`
+                    # stays true, and every later frame gets JPEG-encoded for
+                    # an audience of nobody — on a 2 GB Pi. A bare CRLF is
+                    # ignorable filler between multipart parts.
+                    self.wfile.write(b"\r\n")
+                    self.wfile.flush()
+                    continue
+
                 if jpeg is None:
                     continue
                 self.wfile.write(b"--FRAME\r\n")
@@ -138,6 +160,7 @@ class _State:
         self.jpeg = None
         self.seq = 0
         self.clients = 0
+        self.closing = False
 
 
 class Preview:
@@ -178,6 +201,11 @@ class Preview:
         """Encode and publish a frame. No-op when nobody is watching."""
         if not self.watching:
             return
+        # Imported here rather than at module scope so the server half of this
+        # file — the HTTP surface, the client bookkeeping, the reaping — can be
+        # tested from a laptop with no OpenCV. Same trick synth.py uses.
+        import cv2
+
         ok, buf = cv2.imencode(
             ".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), self.quality])
         if not ok:
@@ -188,5 +216,25 @@ class Preview:
             self.state.changed.notify_all()
 
     def close(self):
+        """Stop serving, and actually wait for the handlers to let go.
+
+        `daemon_threads = True` means `server_close()` closes the listening
+        socket and abandons every in-flight connection rather than joining it —
+        so without this a handler blocked waiting for the next frame outlives
+        close() by up to a keepalive interval, holding a thread and a socket.
+        Deliberate for process *exit*, where a wedged handler must not stop us
+        dying; wrong for a close() the caller expects to mean something.
+        """
+        with self.state.lock:
+            self.state.closing = True
+            self.state.changed.notify_all()
+
+        deadline = time.monotonic() + 2.0
+        while time.monotonic() < deadline:
+            with self.state.lock:
+                if self.state.clients == 0:
+                    break
+            time.sleep(0.01)
+
         self.server.shutdown()
         self.server.server_close()
