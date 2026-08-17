@@ -157,9 +157,10 @@ def _event_nodes():
             if n.startswith("event")]
 
 
-def mouse(**kw):
+def mouse(pointer="relative", **kw):
     """A mouse report on the Bluetooth (combined, report-ID) descriptor."""
-    return hid.mouse_report(report_id=hid.MOUSE_ID, **kw)
+    return hid.mouse_report(report_id=hid.POINTER_IDS[pointer],
+                            pointer=pointer, **kw)
 
 
 def keys(modifiers=0, pressed=()):
@@ -187,9 +188,9 @@ def test_the_abi_matches_this_machine():
 @test
 def test_the_kernel_accepts_every_descriptor_we_generate():
     """A descriptor the kernel can't parse produces no input device at all."""
+    with Virtual(hid.combined_descriptor()) as dev:
+        assert dev.nodes
     for pointer in hid.POINTERS:
-        with Virtual(hid.combined_descriptor(pointer)) as dev:
-            assert dev.nodes, pointer
         with Virtual(hid.mouse_descriptor(pointer=pointer)) as dev:
             assert dev.nodes, pointer
     with Virtual(hid.keyboard_descriptor()) as dev:
@@ -200,7 +201,7 @@ def test_the_kernel_accepts_every_descriptor_we_generate():
 
 @test
 def test_relative_movement_arrives_with_the_right_value_and_sign():
-    with Virtual(hid.combined_descriptor("relative")) as dev:
+    with Virtual(hid.combined_descriptor()) as dev:
         dev.send(mouse(x=10, y=-7))
         got = dev.events()
         assert values(got, "REL_X") == [10], got
@@ -211,7 +212,7 @@ def test_relative_movement_arrives_with_the_right_value_and_sign():
 def test_a_negative_delta_is_not_read_as_a_huge_positive_one():
     """The classic two's-complement bug: -10 arriving as 65526 would send the
     cursor to the far edge of the screen instead of ten pixels left."""
-    with Virtual(hid.combined_descriptor("relative")) as dev:
+    with Virtual(hid.combined_descriptor()) as dev:
         dev.send(mouse(x=-10, y=-1))
         got = dev.events()
         assert values(got, "REL_X") == [-10], got
@@ -221,7 +222,7 @@ def test_a_negative_delta_is_not_read_as_a_huge_positive_one():
 @test
 def test_large_deltas_survive_the_16_bit_axes():
     """The reason the axes are 16-bit rather than the usual 8."""
-    with Virtual(hid.combined_descriptor("relative")) as dev:
+    with Virtual(hid.combined_descriptor()) as dev:
         for delta in (200, -200, 20000, -20000, hid.ABSOLUTE_MAX):
             dev.drain()
             dev.send(mouse(x=delta))
@@ -231,7 +232,7 @@ def test_large_deltas_survive_the_16_bit_axes():
 
 @test
 def test_the_button_goes_down_and_comes_back_up():
-    with Virtual(hid.combined_descriptor("relative")) as dev:
+    with Virtual(hid.combined_descriptor()) as dev:
         dev.send(mouse(buttons=1))
         assert values(dev.events(), "BTN_LEFT") == [1]
         dev.send(mouse(buttons=0))
@@ -242,7 +243,7 @@ def test_the_button_goes_down_and_comes_back_up():
 def test_the_wheel_and_the_pan_axis_are_not_swapped():
     """Wheel is vertical, AC Pan is horizontal. Swapping them is invisible in
     the bytes and obvious the moment a human scrolls."""
-    with Virtual(hid.combined_descriptor("relative")) as dev:
+    with Virtual(hid.combined_descriptor()) as dev:
         dev.send(mouse(wheel=3))
         got = dev.events()
         assert values(got, "REL_WHEEL") == [3], got
@@ -258,15 +259,15 @@ def test_the_wheel_and_the_pan_axis_are_not_swapped():
 @test
 def test_a_resting_report_moves_nothing():
     """The neutral report close() sends must not itself nudge the cursor."""
-    with Virtual(hid.combined_descriptor("relative")) as dev:
+    with Virtual(hid.combined_descriptor()) as dev:
         dev.send(mouse())
         assert dev.events() == [], "the all-zero report produced input"
 
 
 @test
 def test_absolute_positions_arrive_as_absolute_axes():
-    with Virtual(hid.combined_descriptor("absolute")) as dev:
-        dev.send(mouse(x=1000, y=2000, pointer="absolute"))
+    with Virtual(hid.combined_descriptor()) as dev:
+        dev.send(mouse("absolute", x=1000, y=2000))
         got = dev.events()
         # ABS_X/ABS_Y are type 3, which NAMES doesn't map — check by value.
         assert any(v == 1000 for _n, v in got), got
@@ -279,7 +280,7 @@ def test_absolute_positions_arrive_as_absolute_axes():
 def test_the_swipe_shortcut_arrives_as_ctrl_plus_left():
     """What a three-finger swipe actually turns into."""
     modifiers, key = hid.combo("ctrl+left")
-    with Virtual(hid.combined_descriptor("relative")) as dev:
+    with Virtual(hid.combined_descriptor()) as dev:
         dev.send(keys(modifiers, [key]))
         got = dev.events()
         assert values(got, "KEY_LEFTCTRL") == [1], got
@@ -295,7 +296,7 @@ def test_the_swipe_shortcut_arrives_as_ctrl_plus_left():
 @test
 def test_the_other_swipe_direction_is_a_different_key():
     modifiers, key = hid.combo("ctrl+right")
-    with Virtual(hid.combined_descriptor("relative")) as dev:
+    with Virtual(hid.combined_descriptor()) as dev:
         dev.send(keys(modifiers, [key]))
         got = dev.events()
         assert values(got, "KEY_RIGHT") == [1], got
@@ -305,7 +306,7 @@ def test_the_other_swipe_direction_is_a_different_key():
 @test
 def test_a_two_modifier_combo_sets_both():
     modifiers, key = hid.combo("cmd+shift+]")
-    with Virtual(hid.combined_descriptor("relative")) as dev:
+    with Virtual(hid.combined_descriptor()) as dev:
         dev.send(keys(modifiers, [key]))
         got = dev.events()
         assert values(got, "KEY_LEFTSHIFT") == [1], got
@@ -319,7 +320,7 @@ def test_report_ids_route_mouse_and_keyboard_apart():
     """Bluetooth shares one descriptor between both devices, told apart only by
     a leading ID byte. Get that wrong and the host silently drops everything —
     this is the failure the whole combined-descriptor design risks."""
-    with Virtual(hid.combined_descriptor("relative")) as dev:
+    with Virtual(hid.combined_descriptor()) as dev:
         dev.send(mouse(x=5))
         got = dev.events()
         assert values(got, "REL_X") == [5], got
@@ -348,7 +349,7 @@ def test_a_report_sent_with_the_wrong_id_moves_nothing():
     """Proves the previous tests aren't passing by accident — if the kernel
     ignored IDs entirely, a mouse report tagged as a keyboard would still
     move the cursor."""
-    with Virtual(hid.combined_descriptor("relative")) as dev:
+    with Virtual(hid.combined_descriptor()) as dev:
         dev.send(hid.mouse_report(x=50, report_id=hid.KEYBOARD_ID))
         assert values(dev.events(), "REL_X") == [], \
             "the kernel is not honouring report IDs, so the routing tests " \

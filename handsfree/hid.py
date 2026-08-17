@@ -30,7 +30,11 @@ why this is a config switch rather than an argument to have up front.
 """
 
 KEYBOARD_ID = 1
-MOUSE_ID = 2
+MOUSE_ID = 2            # relative pointer
+ABSOLUTE_ID = 3         # absolute pointer, same seven bytes, different meaning
+
+#: Which report ID carries which pointer mode.
+POINTER_IDS = {"relative": MOUSE_ID, "absolute": ABSOLUTE_ID}
 
 # Report descriptor items are (prefix, data...) where the low two bits of the
 # prefix are the data length. Spelling them out as bytes rather than building
@@ -158,16 +162,24 @@ def mouse_descriptor(report_id=None, pointer="relative"):
     return _fill(_MOUSE_HEAD + axes + _MOUSE_TAIL, report_id)
 
 
-def combined_descriptor(pointer="relative"):
-    """One descriptor holding both devices, told apart by report ID.
+def combined_descriptor(pointer=None):
+    """One descriptor holding every device, told apart by report ID.
 
-    What Bluetooth publishes in its SDP record. Changing a single byte of this
-    means every host that has already paired is holding a stale copy — macOS in
-    particular caches the record, so you have to forget the device and pair
-    again or you'll be debugging code that isn't running.
+    What Bluetooth publishes in its SDP record. It carries **both** pointer
+    modes — a relative mouse on report 2 and an absolute one on report 3 —
+    rather than one or the other.
+
+    That matters because macOS reads this once, at pair time, and caches it. If
+    the descriptor held only the configured mode, switching `[hid] pointer`
+    would mean forgetting the device and pairing again, which is not something
+    a plug-in device should ever ask of its host. Carrying both makes the mode
+    a runtime choice: pick a report ID and the host already knows what it means.
+
+    `pointer` is accepted and ignored, so existing callers keep working.
     """
     return (keyboard_descriptor(KEYBOARD_ID)
-            + mouse_descriptor(MOUSE_ID, pointer))
+            + mouse_descriptor(MOUSE_ID, "relative")
+            + mouse_descriptor(ABSOLUTE_ID, "absolute"))
 
 
 # -- reports ---------------------------------------------------------------

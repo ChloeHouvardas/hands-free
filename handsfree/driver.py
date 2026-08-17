@@ -349,9 +349,16 @@ class Driver:
     # -- the wire ----------------------------------------------------------
 
     def _mouse(self, x=0, y=0, wheel=0, pan=0):
+        # The report ID has to match the mode, not just the transport: one
+        # descriptor carries a relative pointer and an absolute one, and
+        # sending absolute coordinates under the relative ID would be read as
+        # an enormous delta.
+        report_id = self.transport.pointer_id(self.pointer)
+        if report_id is None:
+            report_id = self.transport.mouse_id
         self.transport.send_mouse(hid.mouse_report(
             buttons=self.buttons, x=x, y=y, wheel=wheel, pan=pan,
-            report_id=self.transport.mouse_id, pointer=self.pointer))
+            report_id=report_id, pointer=self.pointer))
 
     def _keys(self, modifiers, keys):
         self.transport.send_keyboard(hid.keyboard_report(

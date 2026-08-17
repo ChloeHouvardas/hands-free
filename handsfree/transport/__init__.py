@@ -34,6 +34,11 @@ class Transport:
     keyboard_id = None
     mouse_id = None
 
+    @staticmethod
+    def pointer_id(pointer):
+        """Report ID for a pointer mode. None where IDs aren't used at all."""
+        return None
+
     #: Whether a host is actually listening. Backends that can't tell say True.
     connected = True
 

@@ -259,12 +259,11 @@ def test_the_service_record_embeds_the_descriptor_we_generate():
     hand BlueZ has to actually contain our descriptor, in attribute 0x0206."""
     from handsfree.transport.bluetooth import service_record
 
-    for pointer in hid.POINTERS:
-        desc = hid.combined_descriptor(pointer)
-        record = service_record("Hands-Free", desc)
-        assert desc.hex() in record, f"{pointer} descriptor missing from the record"
-        assert 'id="0x0206"' in record, "no HIDDescriptorList attribute"
-        assert 'value="0x1124"' in record, "not declared as a HID service"
+    desc = hid.combined_descriptor()
+    record = service_record("Hands-Free", desc)
+    assert desc.hex() in record, "descriptor missing from the record"
+    assert 'id="0x0206"' in record, "no HIDDescriptorList attribute"
+    assert 'value="0x1124"' in record, "not declared as a HID service"
 
 
 # -- the factory ------------------------------------------------------------
@@ -345,11 +344,8 @@ def test_the_published_descriptor_is_the_one_we_generate():
     with Advertising():
         out = sdp_records(xml=True)
     flat = out.replace(" ", "").replace("\n", "").lower()
-    for pointer in hid.POINTERS:
-        if hid.combined_descriptor(pointer).hex() in flat:
-            return
-    raise AssertionError("the published HID descriptor doesn't match any "
-                         "descriptor hid.py generates")
+    assert hid.combined_descriptor().hex() in flat, \
+        "the published HID descriptor isn't the one hid.py generates"
 
 
 @on_the_pi

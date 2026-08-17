@@ -260,6 +260,15 @@ class Backend:
     keyboard_id = hid.KEYBOARD_ID
     mouse_id = hid.MOUSE_ID
 
+    @staticmethod
+    def pointer_id(pointer):
+        """Which report ID carries this pointer mode.
+
+        Both live in the one published descriptor, so switching mode is a
+        choice of ID rather than a re-pair.
+        """
+        return hid.POINTER_IDS[pointer]
+
     def __init__(self, cfg=None, verbose=True):
         cfg = cfg or {}
         self.verbose = verbose
