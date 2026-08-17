@@ -409,6 +409,12 @@ class GestureEngine:
         while self.swipe_track and t - self.swipe_track[0][0] > cfg["window"]:
             self.swipe_track.popleft()
 
+        # Note: positions keep accumulating through the refractory window, so a
+        # sweep long enough to still be travelling when the dead time expires
+        # can fire twice. Clearing the track during the refractory fixes that
+        # and costs a real swipe on recordings/swipe.jsonl — recall drops 5→4.
+        # Left alone deliberately: a flick that big isn't a gesture anyone
+        # makes, and real recall is worth more than synthetic tidiness.
         if t < self.refractory_until:
             return []
 
