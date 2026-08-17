@@ -42,20 +42,38 @@ PAGE = """<!doctype html>
   b{color:#7ee787} i{color:#79c0ff;font-style:normal}
   #dot{position:fixed;width:14px;height:14px;margin:-7px 0 0 -7px;
     border:2px solid #ff7b72;border-radius:50%;pointer-events:none}
-  #trail{position:fixed;inset:0;pointer-events:none}
+  #trail{position:fixed;top:0;left:0;width:100vw;height:100vh;
+    pointer-events:none}
 </style>
 <div id="pad"></div><canvas id="trail"></canvas><div id="dot"></div>
 <div id="hud"></div>
 <script>
 const hud = document.getElementById('hud'), dot = document.getElementById('dot');
 const cv = document.getElementById('trail'), cx = cv.getContext('2d');
-cv.width = innerWidth; cv.height = innerHeight;
+// Size the *bitmap*, and keep sizing it. A positioned canvas with auto width
+// keeps its intrinsic bitmap size rather than stretching, so a bitmap fixed at
+// load time becomes a small drawable rectangle in the corner the moment the
+// window is resized or made fullscreen — everything outside it is clipped, and
+// the trail looks broken while the numbers are perfectly correct.
+function fit(){
+  const dpr = devicePixelRatio || 1;
+  cv.width = Math.round(innerWidth * dpr);
+  cv.height = Math.round(innerHeight * dpr);
+  cx.setTransform(dpr, 0, 0, dpr, 0, 0);   // draw in CSS pixels
+  s.last = null;                            // don't join across the gap
+}
+addEventListener('resize', fit);
 let s = {moves:0, dist:0, downs:0, ups:0, wheel:0, hwheel:0, keys:[],
          x:0, y:0, minx:1e9, maxx:-1e9, miny:1e9, maxy:-1e9, last:null};
+function reset(){
+  s = {moves:0, dist:0, downs:0, ups:0, wheel:0, hwheel:0, keys:[],
+       x:0, y:0, minx:1e9, maxx:-1e9, miny:1e9, maxy:-1e9, last:null};
+  cx.clearRect(0, 0, cv.width, cv.height); paint();
+}
 
 function paint(){
   hud.innerHTML =
-    `<b>hands-free catcher</b> — click here safely<br>`+
+    `<b>hands-free catcher</b> — click here safely · press r to clear<br>`+
     `moves <i>${s.moves}</i>   travel <i>${Math.round(s.dist)}</i>px   `+
     `box <i>${s.maxx>s.minx?Math.round(s.maxx-s.minx):0}</i>x`+
     `<i>${s.maxy>s.miny?Math.round(s.maxy-s.miny):0}</i><br>`+
@@ -91,10 +109,12 @@ addEventListener('keydown', e => {
   s.keys.push(name); e.preventDefault(); paint();
 });
 addEventListener('contextmenu', e => e.preventDefault());
+// Press r to clear, so a run starts from a known-empty slate.
+addEventListener('keydown', e => { if (e.key === 'r') reset(); });
 setInterval(() => {
   fetch('/report', {method:'POST', body:JSON.stringify(s)}).catch(()=>{});
 }, 500);
-paint();
+fit(); paint();
 </script>
 """.encode("utf-8")
 
