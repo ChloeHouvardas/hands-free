@@ -36,13 +36,27 @@ Bluetooth mice or keyboards itself.** It's one now.
 
 ## Working on it (on any laptop, no hardware)
 
-The gesture layer, the report encoding and the driver import nothing
-hardware — not even numpy — so all of this runs anywhere:
+The gesture layer, the report encoding, the driver and the scripted scenarios
+import nothing hardware — not even numpy — so all of this runs anywhere:
 
 ```sh
-python3 test_gestures.py
-python3 test_hid.py
-python3 test_driver.py
-python3 -m handsfree replay 'recordings/*.jsonl' --check --drive
+python3 -m handsfree selftest      # every suite this machine can run
 ```
+
+The whole app runs without a camera too, which is the quickest way to watch a
+change work:
+
+```sh
+python3 -m handsfree run --source synth:demo --transport null --no-preview
+python3 -m handsfree run --source replay:recordings/pinch.jsonl --transport null
+```
+
+`--source synth:<name>` plays a scripted session from `handsfree/scripts.py`;
+each script carries its own expectations, so the thing you demo and the thing
+`test_scenarios.py` asserts are the same object. `python3 -m handsfree run
+--source synth:nope` lists them.
+
+On the Pi, `sudo venv/bin/python -m handsfree selftest --soak` adds the
+hardware suites: our HID bytes checked against the kernel's own parser via
+`/dev/uhid`, the live SDP record, and a leak run.
 
