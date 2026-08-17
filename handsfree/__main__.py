@@ -17,6 +17,7 @@ COMMANDS = {
     "record": "record a landmark session to recordings/*.jsonl",
     "replay": "replay recordings through the gesture layer",
     "selftest": "run every test suite this machine can run",
+    "doctor": "is the vision half healthy? drops, frame time, jitter",
     "bench": "FPS, latency, CPU and jitter",
     "capture": "camera only, no ML — to tell the two halves apart",
     "landmarks": "draw the 21 landmarks on the live view",
