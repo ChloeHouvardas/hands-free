@@ -19,6 +19,7 @@ import os
 from types import SimpleNamespace
 
 from handsfree.cli import parser
+from handsfree.config import load_config
 from handsfree.gestures import GestureEngine
 
 # clip -> {event: (min, max)}. None as a bound means don't care.
@@ -65,7 +66,7 @@ def load(path):
             yield header, rec["t"], pts
 
 
-def replay(path, drop=0, verbose=False):
+def replay(path, drop=0, verbose=False, driver=None):
     engine = GestureEngine()
     counts = {}
     states = {}
@@ -83,7 +84,14 @@ def replay(path, drop=0, verbose=False):
         frames += 1
         if landmarks:
             hits += 1
-        for event in engine.update(landmarks, t):
+        events = engine.update(landmarks, t)
+        if driver is not None:
+            # Run the driver on the clip's own clock, so the watchdog and the
+            # drag ceiling see the same seconds the recording did.
+            driver.clock = lambda t=t: t
+            driver.handle(events)
+            driver.pump()
+        for event in events:
             counts[event.name] = counts.get(event.name, 0) + 1
             if verbose and event.name != "cursor":
                 print(f"  {t:6.2f}s  {event}")
@@ -120,6 +128,10 @@ def main():
                     help="pass/fail each clip against EXPECT")
     ap.add_argument("--verbose", "-v", action="store_true",
                     help="print every event as it fires")
+    ap.add_argument("--drive", action="store_true",
+                    help="also push events through the driver and a transport")
+    ap.add_argument("--transport", default="null",
+                    help="which transport --drive uses (default: null)")
     args = ap.parse_args()
 
     paths = []
@@ -128,7 +140,20 @@ def main():
 
     failures = 0
     for path in paths:
-        label, frames, hits, counts, states = replay(path, args.drop, args.verbose)
+        driver = None
+        if args.drive:
+            from handsfree import transport as transports
+            from handsfree.driver import Driver
+            hid_cfg = load_config().get("hid", {})
+            wire = transports.open(args.transport, hid_cfg,
+                                   **({"quiet": not args.verbose}
+                                      if args.transport == "null" else {}))
+            # thread=False: the clip's clock is not the wall clock, so the
+            # interpolation thread would run against the wrong seconds.
+            driver = Driver(wire, hid_cfg, thread=False)
+
+        label, frames, hits, counts, states = replay(path, args.drop,
+                                                     args.verbose, driver)
         rate = 100 * hits / frames if frames else 0
         summary = "  ".join(f"{k}={v}" for k, v in sorted(counts.items())
                             if k != "cursor")
@@ -136,6 +161,27 @@ def main():
 
         line = (f"{label:>9}  {frames:4d}f  hand {rate:3.0f}%  "
                 f"mostly {top:<7}  {summary}")
+
+        if driver is not None:
+            # A clip can legitimately run out mid-pinch — `pinch` does, and so
+            # would a real session that ended with your hand still closed. That
+            # isn't a stuck button, it's the tape ending. What would be a stuck
+            # button is a hold that outlasts the ceiling with no guard firing,
+            # so that's what gets called out.
+            note = ""
+            if driver.buttons:
+                # replay() leaves driver.clock pinned to the last frame's time.
+                end = driver.clock()
+                for_ = end - (driver.drag_since if driver.drag_since is not None
+                              else end)
+                note = (f", HELD {for_:.1f}s UNGUARDED"
+                        if for_ > float(driver.cfg["max_drag"])
+                        else f", still down at eof after {for_:.1f}s")
+            driver.close()
+            reports = len(getattr(driver.transport, "sent", ()))
+            released = (f", released by {driver.released_by}"
+                        if driver.released_by else "")
+            line += f"   [{reports} reports{released}{note}]"
 
         if args.check:
             bad = check(label, counts)
