@@ -267,8 +267,56 @@ class Backend:
         sock.listen(1)
         return sock
 
+    def paired_hosts(self):
+        """Addresses we're already paired with, ones already linked first."""
+        try:
+            import dbus
+            manager = dbus.Interface(
+                self.bluez["bus"].get_object("org.bluez", "/"),
+                "org.freedesktop.DBus.ObjectManager")
+            found = []
+            for _path, ifaces in manager.GetManagedObjects().items():
+                device = ifaces.get("org.bluez.Device1")
+                if device and bool(device.get("Paired")):
+                    found.append((bool(device.get("Connected")),
+                                  str(device["Address"])))
+            found.sort(reverse=True)
+            return [addr for _linked, addr in found]
+        except Exception:
+            return []
+
+    def _reach_out(self, address):
+        """Open the HID channels to a host that won't open them to us.
+
+        macOS connects to our PSM 17/19 during pairing and then never again —
+        on every later run it holds the ACL link but leaves the HID channels
+        shut, so a device that only ever listens works exactly once and then
+        looks broken until you forget it and pair afresh.
+
+        The HID spec anticipates this: attribute 0x0205 (ReconnectInitiate),
+        which our SDP record sets true, means *the device* is expected to
+        re-establish the link. So we dial out.
+        """
+        socks = []
+        for psm in (P_CTRL, P_INTR):
+            sock = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_SEQPACKET,
+                                 socket.BTPROTO_L2CAP)
+            sock.settimeout(6.0)
+            try:
+                sock.connect((address, psm))
+            except OSError:
+                sock.close()
+                for done in socks:
+                    done.close()
+                return None
+            socks.append(sock)
+        for sock in socks:
+            sock.settimeout(None)
+        return socks
+
     def _accept_forever(self):
-        """Take the host back whenever it reconnects — a lid close drops it."""
+        """Keep a link to the host: take one offered, or go and make one."""
+        reached = 0.0
         while not self._closed:
             # Poll rather than block in accept(). A blocked accept() on an
             # L2CAP socket is not woken by close() or shutdown() from another
@@ -276,18 +324,37 @@ class Backend:
             # EADDRINUSE on PSM 17. Restarting the app after Ctrl-C is not an
             # edge case, so shutdown has to be deterministic.
             ready, _, _ = select.select([self._listen_ctrl], [], [], 0.2)
+
             if not ready:
-                continue
-            try:
-                ctrl, addr = self._listen_ctrl.accept()
-                intr, _ = self._listen_intr.accept()
-            except OSError:
-                return                      # closed under us; we're shutting down
+                # Nobody is calling us. Try calling them, but not on every
+                # pass — a failed connect can take seconds and there's no
+                # point hammering a Mac that's asleep.
+                if time.monotonic() - reached < 5.0:
+                    continue
+                reached = time.monotonic()
+                for address in self.paired_hosts():
+                    if self._closed:
+                        return
+                    socks = self._reach_out(address)
+                    if socks:
+                        ctrl, intr = socks
+                        addr = (address,)
+                        if self.verbose:
+                            print(f"  connected out to {address}", flush=True)
+                        break
+                else:
+                    continue
+            else:
+                try:
+                    ctrl, addr = self._listen_ctrl.accept()
+                    intr, _ = self._listen_intr.accept()
+                except OSError:
+                    return                  # closed under us; shutting down
+                if self.verbose:
+                    print(f"  host connected: {addr[0]}", flush=True)
 
             with self._lock:
                 self._ctrl, self._intr, self._peer = ctrl, intr, addr[0]
-            if self.verbose:
-                print(f"  host connected: {addr[0]}", flush=True)
 
             # Whatever state the last session ended in, the host doesn't know
             # about it. Start from a neutral one so a button can't survive a
