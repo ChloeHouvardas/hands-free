@@ -20,7 +20,7 @@ import cv2
 from picamera2 import Picamera2
 
 
-def open_camera(width, height, fps=30):
+def open_camera(width, height, fps=30, lock=True, settle=1.5):
     try:
         picam2 = Picamera2()
     except RuntimeError as e:
@@ -44,5 +44,28 @@ def open_camera(width, height, fps=30):
     config["controls"] = {"FrameDurationLimits": (frame_us, frame_us)}
     picam2.configure(config)
     picam2.start()
-    time.sleep(1)  # let auto-exposure settle
+    time.sleep(settle)  # let auto-exposure and white balance settle
+
+    if lock:
+        # Freeze what the camera settled on. Auto-exposure never stops
+        # re-metering, and a hand moving through frame is exactly what makes it
+        # re-meter — so the image MediaPipe sees keeps shifting brightness
+        # underneath the hand it is trying to hold on to. One of the two
+        # suspects for the detection flicker; `python3 -m handsfree doctor`
+        # reports whether exposure is still moving.
+        try:
+            metadata = picam2.capture_metadata()
+            controls = {"AeEnable": False, "AwbEnable": False}
+            if metadata.get("ExposureTime"):
+                controls["ExposureTime"] = int(metadata["ExposureTime"])
+            if metadata.get("AnalogueGain"):
+                controls["AnalogueGain"] = float(metadata["AnalogueGain"])
+            if metadata.get("ColourGains"):
+                controls["ColourGains"] = tuple(metadata["ColourGains"])
+            picam2.set_controls(controls)
+            time.sleep(0.2)
+        except Exception:
+            # Not every sensor exposes every control. A camera that won't lock
+            # is worth carrying on with, not worth refusing to start over.
+            pass
     return picam2

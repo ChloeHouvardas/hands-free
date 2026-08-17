@@ -24,7 +24,7 @@ from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python import vision
 
 from handsfree.capture import open_camera
-from handsfree.config import ROOT, rotation
+from handsfree.config import ROOT, load_config, rotation
 # Constants and geometry live in hand.py, which imports nothing — so the gesture
 # layer stays usable on a machine without a camera.
 from handsfree.hand import CONNECTIONS, INDEX_TIP, MIDDLE_MCP, THUMB_TIP, WRIST  # noqa: F401
@@ -48,16 +48,32 @@ class HandTracker:
     }
 
     def __init__(self, width=640, height=480, num_hands=1, model=MODEL,
-                 rotate=0):
+                 rotate=0, config=None):
         if rotate not in (0, 90, 180, 270):
             raise ValueError("rotate must be 0, 90, 180 or 270")
         self.rotate = self.ROTATIONS.get(rotate)
-        self.picam2 = open_camera(width, height)
+
+        cfg = config or load_config()
+        camera = cfg.get("camera", {})
+        vis = cfg.get("vision", {})
+
+        self.picam2 = open_camera(width, height,
+                                  lock=camera.get("lock_exposure", True),
+                                  settle=camera.get("settle", 1.5))
+
+        # These three were left at MediaPipe's 0.5 default for the life of the
+        # project, which is the leading suspect for the detection flicker: in
+        # VIDEO mode the tracker abandons the hand it is following and re-runs
+        # palm detection whenever presence drops below the threshold. Fussy to
+        # acquire, stubborn to let go — see [vision] in config.toml.
         self.detector = vision.HandLandmarker.create_from_options(
             vision.HandLandmarkerOptions(
                 base_options=mp_python.BaseOptions(model_asset_path=model),
                 running_mode=vision.RunningMode.VIDEO,
                 num_hands=num_hands,
+                min_hand_detection_confidence=vis.get("detection", 0.5),
+                min_hand_presence_confidence=vis.get("presence", 0.5),
+                min_tracking_confidence=vis.get("tracking", 0.5),
             )
         )
         self._t0 = time.perf_counter()
@@ -76,6 +92,15 @@ class HandTracker:
 
             hands = result.hand_landmarks
             yield frame, (hands[0] if hands else None)
+
+    def metadata(self):
+        """Exposure and gain right now, so `doctor` can see if AE is hunting."""
+        try:
+            meta = self.picam2.capture_metadata()
+        except Exception:
+            return {}
+        return {"exposure": meta.get("ExposureTime"),
+                "gain": meta.get("AnalogueGain")}
 
     def close(self):
         # stop() alone leaves the camera claimed, so a second HandTracker in the

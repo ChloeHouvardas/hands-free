@@ -15,6 +15,35 @@
 # noticeably worse on rotated ones. Costs about a millisecond.
 # Change this if you remount the camera; --rotate overrides it for a one-off.
 rotate = 180
+# Lock exposure, gain and white balance once the camera has settled.
+#
+# The other suspect for open problem #1. Auto-exposure never stops re-metering,
+# and a hand moving through frame is exactly what makes it re-meter — so the
+# image the model sees keeps changing brightness underneath it. Locking after
+# the settle window gives the model a stable image, at the cost of coping badly
+# if the room lighting changes mid-session.
+#
+# Set false if the room's light actually varies while you use it.
+lock_exposure = true
+settle = 1.5         # seconds of auto-exposure before locking
+
+[vision]
+# How hard MediaPipe works to keep hold of a hand. These were never set, which
+# left all three at the library default of 0.5 — and that is the leading
+# suspect for open problem #1, the detection flickering in and out about once a
+# second. In VIDEO mode the tracker re-runs full palm detection whenever its
+# confidence in the hand it is following drops below `presence`, so a hand
+# sitting near 0.5 makes it drop and re-acquire over and over. Everything
+# downstream assumes a stable hand, so this matters more than any threshold
+# below it.
+#
+# The asymmetry is deliberate: be *fussy* about deciding something is a hand,
+# then be *stubborn* about keeping it. That reduces flicker and false positives
+# at the same time, where a single shared threshold has to trade one for the
+# other.
+detection = 0.6      # confidence needed to first acquire a hand
+presence = 0.3       # below this, the tracker gives up and re-detects
+tracking = 0.3       # below this, tracking is considered lost
 
 [fingers]
 # A finger counts as extended above `extend` and only stops counting below
