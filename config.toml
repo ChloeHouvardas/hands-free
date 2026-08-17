@@ -1,0 +1,76 @@
+# Every threshold in the gesture layer. Nothing tunable lives in the code.
+#
+# The numbers here aren't guesses — they came out of measuring the recordings in
+# recordings/. Run `python replay.py recordings/*.jsonl --quiet` after changing
+# anything and see what moved.
+#
+# Angles are degrees. Distances are multiples of hand size, so they hold at any
+# distance from the camera. Times are seconds, never frame counts — the frame
+# rate wanders between 8 and 12 fps and a frame count means a different amount
+# of real time from one run to the next.
+
+[fingers]
+# A finger counts as extended above `extend` and only stops counting below
+# `curl`. Two thresholds, not one, or a finger sitting on the line chatters.
+# Measured: extended fingers land 160-179, curled ones 90-130.
+extend = 155.0
+curl = 138.0
+# Thumb swung clear of the palm, in degrees. Tucked reads under 20, spread
+# near 50. Only used to tell an open palm from a three-finger swipe.
+thumb_out = 40.0
+
+[pinch]
+# Thumb tip to index tip over hand size. Measured: pinched 0.2, open 1.5.
+enter = 0.50
+exit = 0.70
+# Pinch gets a much shorter confirmation than a pose does, because it's a far
+# cleaner signal — the gap between pinched and open is enormous, where the
+# difference between two and three fingers is a few degrees. A real pinch only
+# lasts 2-4 frames at 10 fps, so anything longer than this drops half of them.
+dwell = 0.06
+
+[pose]
+# How long a pose must hold before we believe it. At ~10 fps this is 2-3
+# frames, enough to ride out a single bad detection without feeling sticky.
+dwell = 0.25
+# Scroll and swipe are modes, not actions — nothing is lost by being slower to
+# believe them, and both fire real input, so a transient misread is expensive.
+modal_dwell = 0.45
+# Leaving PARKED asks for one of these poses, held this long. Pointing is the
+# only way to take control — a hand just resting in view sits with two or three
+# fingers out most of the time, and letting that wake things up is where nearly
+# every false click came from.
+wake_poses = ["POINT"]
+wake = 0.45
+# Hand missing for longer than this counts as gone. Shorter and MediaPipe's
+# routine dropped frames release a held pinch mid-drag.
+lost_grace = 0.25
+# Point your hand at the camera and it foreshortens — every 2D method falls
+# apart and none can tell. So watch for hand size collapsing against its recent
+# median and freeze instead of guessing.
+foreshorten = 0.62
+
+[cursor]
+# Hand travel to screen travel. 2.0 means crossing half the frame crosses the
+# whole screen. Lower feels heavier and more precise.
+gain = 2.0
+# One Euro filter. min_cutoff down = steadier when still but laggier;
+# beta up = less lag when moving fast but jumpier.
+min_cutoff = 0.5
+beta = 5.0
+d_cutoff = 1.0
+
+[scroll]
+# Rate control: how far you've moved from where the pose started sets the
+# scroll *speed*, not the position. A dropped frame costs a little speed for
+# one frame instead of desynchronising the whole gesture.
+settle = 0.20        # hold the pose this long before any of it counts
+deadzone = 0.25      # hand sizes of slack before anything moves
+full = 1.20          # displacement that means full speed
+max_rate = 14.0      # ticks per second at full speed
+
+[swipe]
+distance = 1.00      # hand sizes travelled before it fires
+dominance = 1.80     # how much more sideways than vertical it has to be
+window = 1.20        # travel has to happen within this rolling window
+refractory = 0.60    # dead time after a swipe, so one flick isn't two
