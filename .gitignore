@@ -5,6 +5,9 @@ __pycache__/
 # Claude config — instructions and skills, kept local
 .claude/
 
+# Working notes — handoffs and state, kept local
+docs/todos/
+
 # Model bundle — downloaded on the Pi, not checked in
 *.task
 recordings/
