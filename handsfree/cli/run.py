@@ -26,6 +26,9 @@ def main():
                     help="override [hid] backend in config.toml")
     ap.add_argument("--pointer", choices=("relative", "absolute"), default=None,
                     help="override [hid] pointer in config.toml")
+    ap.add_argument("--source", default="camera",
+                    help="camera | replay:<path> | synth:<script> — where "
+                         "frames come from. The fakes need no camera at all.")
     ap.add_argument("--no-preview", action="store_true")
     ap.add_argument("--port", type=int, default=8080)
     args = ap.parse_args()
@@ -35,11 +38,9 @@ def main():
     # from a laptop before running it on the Pi.
     import time
 
-    import cv2
-
+    from handsfree import sources
     from handsfree import transport as transports
     from handsfree.driver import Driver
-    from handsfree.landmarks import HandTracker, draw
     from handsfree.preview import Preview
 
     cfg = load_config()
@@ -48,9 +49,18 @@ def main():
         hid_cfg["pointer"] = args.pointer
     backend = args.transport or hid_cfg.get("backend", "null")
 
-    tracker = HandTracker(args.width, args.height,
-                          rotate=rotation(args.rotate))
+    # `sources.open` pulls in the camera stack only for --source camera, so a
+    # replay or synth run works on a laptop with no picamera2 and no MediaPipe.
+    tracker = sources.open(args.source, args.width, args.height,
+                           rotate=rotation(args.rotate))
     preview = None if args.no_preview else Preview(port=args.port)
+
+    # cv2 and draw() are only needed to annotate frames for the preview, and
+    # the preview is the one part a fake source can't usefully feed.
+    cv2 = draw = None
+    if preview:
+        import cv2
+        from handsfree.landmarks import draw
     engine = GestureEngine(cfg)
     wire = transports.open(backend, hid_cfg)
     driver = Driver(wire, hid_cfg)
@@ -60,7 +70,8 @@ def main():
 
     if preview:
         print(preview.banner(), flush=True)
-    print(f"  transport: {backend} ({hid_cfg.get('pointer', 'relative')})",
+    print(f"  transport: {backend} ({hid_cfg.get('pointer', 'relative')})"
+          + (f"   source: {args.source}" if args.source != "camera" else ""),
           flush=True)
     print("  Point at the camera to take control. Open palm parks it.\n",
           flush=True)

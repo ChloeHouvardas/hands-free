@@ -172,6 +172,26 @@ def pinching(seconds, ratio=0.2, fps=9.5, curl=None, **kw):
     return [hand(curl=curl, pinch=ratio, **kw) for _ in range(n)]
 
 
+def dragging(seconds, x0, x1, y0=0.5, y1=None, ratio=0.2, fps=9.5, curl=None,
+             **kw):
+    """A pinch held closed while the hand travels — which is a drag.
+
+    `sweep` takes a pose name and `pinching` doesn't move, so a drag used to be
+    written out as a list comprehension every time it was needed. It's the most
+    consequential gesture in the set, since it's the one that holds a mouse
+    button down, so it deserves to be as easy to write as the others.
+    """
+    curl = curl if curl is not None else {"ring": 0.9, "pinky": 0.9}
+    y1 = y0 if y1 is None else y1
+    n = max(2, int(seconds * fps))
+    out = []
+    for i in range(n):
+        f = i / (n - 1)
+        out.append(hand(curl=curl, pinch=ratio,
+                        x=x0 + (x1 - x0) * f, y=y0 + (y1 - y0) * f, **kw))
+    return out
+
+
 def main():
     """Draw the poses so they can be eyeballed rather than trusted."""
     import cv2
