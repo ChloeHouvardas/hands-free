@@ -20,6 +20,39 @@ import cv2
 from picamera2 import Picamera2
 
 
+#: Below this mean frame brightness (0-255), tracking gets unreliable no matter
+#: how the thresholds are set. Measured: a room that produced constant
+#: detection dropouts sat at 32, with the sensor already at maximum gain.
+DARK = 55
+
+
+def brightness(frame):
+    """Mean luminance of a frame, 0-255. Cheap enough to do at start-up."""
+    return float(frame.mean())
+
+
+def light_warning(picam2, frame=None):
+    """A sentence about the light, or None if the scene is fine.
+
+    Worth checking every run. A dark scene forces the sensor to maximum gain
+    and a long exposure, which means a noisy, motion-blurred image — and that
+    loses hands far more effectively than any threshold recovers them. It looks
+    exactly like a software fault, so it's worth naming out loud.
+    """
+    try:
+        frame = picam2.capture_array() if frame is None else frame
+        mean = brightness(frame)
+        meta = picam2.capture_metadata()
+    except Exception:
+        return None
+    gain = meta.get("AnalogueGain") or 0
+    if mean >= DARK:
+        return None
+    return (f"the scene is dark (brightness {mean:.0f}/255, gain {gain:.1f}) - "
+            f"tracking will drop\n  hands. Add light in front of you, then "
+            f"restart: exposure is locked at start-up.")
+
+
 def open_camera(width, height, fps=30, lock=True, settle=1.5):
     try:
         picam2 = Picamera2()

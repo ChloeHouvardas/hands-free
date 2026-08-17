@@ -98,6 +98,12 @@ def main():
                   "  System Settings > Bluetooth. It will connect by itself "
                   "once paired,\n"
                   "  and reconnect by itself after that.", flush=True)
+    if args.source == "camera":
+        from handsfree.capture import light_warning
+        warning = light_warning(getattr(tracker, "picam2", None))
+        if warning:
+            print(f"\n  WARNING: {warning}", flush=True)
+
     print("\n  Point at the camera to take control. Open palm parks it.\n",
           flush=True)
 

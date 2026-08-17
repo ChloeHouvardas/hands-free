@@ -55,6 +55,9 @@ def summarise(frames, drops, seconds):
                  for a, b in zip(tips, tips[1:])]
         out["jitter"] = statistics.median(steps)
         out["jitter_p95"] = sorted(steps)[int(len(steps) * 0.95)]
+    lums = [f["lum"] for f in frames if f.get("lum") is not None]
+    if lums:
+        out["brightness"] = statistics.median(lums)
     gains = [f["gain"] for f in frames if f.get("gain")]
     exps = [f["exposure"] for f in frames if f.get("exposure")]
     if gains:
@@ -83,6 +86,15 @@ def report(s):
     if "jitter" in s:
         print(f"  jitter        {s['jitter']:.4f} median, "
               f"{s['jitter_p95']:.4f} p95  (normalized units, hand held still)")
+    if "brightness" in s:
+        from handsfree.capture import DARK
+        lum = s["brightness"]
+        print(f"  brightness    {lum:.0f}/255   "
+              f"<- {'fine' if lum >= DARK else 'TOO DARK - add light'}")
+        if lum < DARK:
+            print("                 a dark scene forces maximum gain and a long")
+            print("                 exposure: noisy and motion-blurred, which")
+            print("                 loses hands whatever the thresholds say")
     if "gain" in s:
         print(f"  gain          {s['gain'][0]:.2f} -> {s['gain'][1]:.2f}"
               f"   {'STILL HUNTING' if s.get('gain_moved') else 'locked'}")
@@ -139,6 +151,10 @@ def main():
                 row["tip"] = [round(tip.x, 5), round(tip.y, 5)]
             meta = tracker.metadata()
             row.update(meta)
+            # Every tenth frame — mean() over 640x480 is not free at 9 fps.
+            if len(frames) % 10 == 0:
+                from handsfree.capture import brightness
+                row["lum"] = round(brightness(frame), 1)
             frames.append(row)
 
             # A drop is a hand we had and then lost. Counting transitions, not
