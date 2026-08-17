@@ -20,7 +20,6 @@ after is one frame.
 import argparse
 import json
 import os
-import socket
 import sys
 import threading
 import time
@@ -28,7 +27,7 @@ import time
 import cv2
 
 from landmarks import HandTracker, draw
-from preview import Preview
+from preview import Preview, lan_ip
 
 OUT_DIR = "recordings"
 
@@ -204,18 +203,6 @@ class Recorder:
         self.thread.join(timeout=3)
         with self.lock:
             self._close_file()
-
-
-def lan_ip():
-    """Best-effort local IP, for printing a URL that actually works."""
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        s.connect(("8.8.8.8", 80))
-        return s.getsockname()[0]
-    except OSError:
-        return socket.gethostname()
-    finally:
-        s.close()
 
 
 def main():

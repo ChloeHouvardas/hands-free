@@ -11,10 +11,28 @@ Frames are only encoded while a browser is actually connected, so leaving this
 enabled with nobody watching costs nothing.
 """
 
+import socket
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import cv2
+
+
+def lan_ip():
+    """Best-effort local IP, so we can print a URL that actually works.
+
+    Doesn't send anything — opening a UDP socket is just how you ask the
+    routing table which interface would be used to get out.
+    """
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+    except OSError:
+        return socket.gethostname()
+    finally:
+        s.close()
+
 
 PAGE = """<!doctype html>
 <meta charset="utf-8">
@@ -91,6 +109,7 @@ class _State:
 
 class Preview:
     def __init__(self, port=8080, quality=70):
+        self.port = port
         self.quality = quality
         self.state = _State()
         self.server = ThreadingHTTPServer(("0.0.0.0", port), _Handler)
@@ -102,6 +121,17 @@ class Preview:
     def watching(self):
         with self.state.lock:
             return self.state.clients > 0
+
+    def banner(self):
+        """Where to point a browser. Print this or nobody will find it.
+
+        A tab left open from a previous run won't reconnect by itself — the
+        image stream died with the old process — so it needs a reload, not
+        just switching back to it.
+        """
+        return (f"\n  live view:  http://{lan_ip()}:{self.port}"
+                f"\n              http://{socket.gethostname()}.local:{self.port}"
+                f"\n  (if a tab is already open from an earlier run, reload it)\n")
 
     def update(self, frame):
         """Encode and publish a frame. No-op when nobody is watching."""

@@ -479,6 +479,11 @@ def main():
     engine = GestureEngine()
     t0 = time.perf_counter()
 
+    if preview:
+        print(preview.banner(), flush=True)
+    print("  Point at the camera to take control. Open palm parks it.\n",
+          flush=True)
+
     try:
         for frame, landmarks in tracker.frames():
             t = time.perf_counter() - t0
