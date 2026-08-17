@@ -31,6 +31,7 @@ Two gotchas that will cost you an evening each:
   MJPEG preview streams over Wi-Fi. Run with `--no-preview` when it matters.
 """
 
+import select
 import socket
 import threading
 import time
@@ -269,6 +270,14 @@ class Backend:
     def _accept_forever(self):
         """Take the host back whenever it reconnects — a lid close drops it."""
         while not self._closed:
+            # Poll rather than block in accept(). A blocked accept() on an
+            # L2CAP socket is not woken by close() or shutdown() from another
+            # thread — the fd stays claimed, and the next run dies with
+            # EADDRINUSE on PSM 17. Restarting the app after Ctrl-C is not an
+            # edge case, so shutdown has to be deterministic.
+            ready, _, _ = select.select([self._listen_ctrl], [], [], 0.2)
+            if not ready:
+                continue
             try:
                 ctrl, addr = self._listen_ctrl.accept()
                 intr, _ = self._listen_intr.accept()
@@ -289,10 +298,15 @@ class Backend:
             self._wait_for_hangup(ctrl)
 
     def _wait_for_hangup(self, ctrl):
-        """Block until the control channel drops, then drop everything."""
+        """Wait for the control channel to drop, then drop everything.
+
+        Polled for the same reason the accept loop is: a thread parked in
+        recv() can't be told to stop.
+        """
         try:
             while not self._closed:
-                if not ctrl.recv(64):
+                ready, _, _ = select.select([ctrl], [], [], 0.2)
+                if ready and not ctrl.recv(64):
                     break
         except OSError:
             pass
@@ -341,6 +355,14 @@ class Backend:
 
     def close(self):
         self._closed = True
+
+        # Let the accept loop notice and step off the sockets first, so the
+        # fds are genuinely free when we close them rather than still held by
+        # a thread parked inside accept().
+        accepting = getattr(self, "_accepting", None)
+        if accepting is not None and accepting is not threading.current_thread():
+            accepting.join(timeout=1.5)
+
         with self._lock:
             # getattr, because __init__ can fail partway — binding PSM 19 after
             # PSM 17 succeeded, say — and a close() that raises AttributeError
@@ -364,10 +386,6 @@ class Backend:
                 sock.close()
             except OSError:
                 pass
-
-        accepting = getattr(self, "_accepting", None)
-        if accepting is not None and accepting is not threading.current_thread():
-            accepting.join(timeout=1.0)
 
         bluez = getattr(self, "bluez", None)
         if bluez is None:
