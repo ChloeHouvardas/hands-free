@@ -83,14 +83,40 @@ def main():
     print(f"  transport: {backend} ({hid_cfg.get('pointer', 'relative')})"
           + (f"   source: {args.source}" if args.source != "camera" else ""),
           flush=True)
-    print("  Point at the camera to take control. Open palm parks it.\n",
+
+    # This process advertises and accepts pairing on its own — the transport's
+    # advertise() registers the agent and sets the adapter discoverable — so
+    # there is no separate `pair` step to forget. Say so, because an operator
+    # standing in front of an audience needs to know whether the link is up
+    # without reading source.
+    if backend == "bluetooth":
+        if wire.connected:
+            print(f"  paired and connected to {wire.peer}", flush=True)
+        else:
+            print("  no host yet — it is discoverable now, so pair "
+                  "'Hands-Free' from\n"
+                  "  System Settings > Bluetooth. It will connect by itself "
+                  "once paired,\n"
+                  "  and reconnect by itself after that.", flush=True)
+    print("\n  Point at the camera to take control. Open palm parks it.\n",
           flush=True)
 
+    linked = wire.connected
     try:
         for frame, landmarks in tracker.frames():
             t = time.perf_counter() - t0
             events = engine.update(landmarks, t)
             driver.handle(events)
+
+            # Announce the link changing state. Losing the host mid-demo
+            # otherwise looks exactly like the gesture layer having stopped
+            # working, and the two want completely different responses.
+            if wire.connected != linked:
+                linked = wire.connected
+                print(f"{t:6.2f}s  "
+                      + (f"host connected ({wire.peer})" if linked
+                         else "HOST DISCONNECTED - gestures are going nowhere"),
+                      flush=True)
             for event in events:
                 if event.name != "cursor":
                     print(f"{t:6.2f}s  {event}", flush=True)
