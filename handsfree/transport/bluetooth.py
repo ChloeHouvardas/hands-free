@@ -186,10 +186,18 @@ def advertise(name="Hands-Free", pointer="relative", verbose=True):
 
     props = dbus.Interface(bus.get_object("org.bluez", "/org/bluez/hci0"),
                            "org.freedesktop.DBus.Properties")
-    props.Set("org.bluez.Adapter1", "Alias", name)
-    props.Set("org.bluez.Adapter1", "Powered", dbus.Boolean(1))
-    props.Set("org.bluez.Adapter1", "Pairable", dbus.Boolean(1))
-    props.Set("org.bluez.Adapter1", "Discoverable", dbus.Boolean(1))
+    # variant_level=1 on every value, because Properties.Set takes `ssv` and
+    # dbus-python only infers the variant when introspecting the object
+    # works. When it doesn't — which happens intermittently under repeated
+    # rapid startup — it marshals a bare `sss` and BlueZ rejects the call with
+    # "Method Set with signature sss doesn't exist", so the transport simply
+    # fails to come up. Being explicit costs nothing and removes the coin flip.
+    props.Set("org.bluez.Adapter1", "Alias",
+              dbus.String(name, variant_level=1))
+    props.Set("org.bluez.Adapter1", "Powered", dbus.Boolean(1, variant_level=1))
+    props.Set("org.bluez.Adapter1", "Pairable", dbus.Boolean(1, variant_level=1))
+    props.Set("org.bluez.Adapter1", "Discoverable",
+              dbus.Boolean(1, variant_level=1))
 
     agent = Agent(bus, AGENT_PATH)
     manager = dbus.Interface(bus.get_object("org.bluez", "/org/bluez"),
