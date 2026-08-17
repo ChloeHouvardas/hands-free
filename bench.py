@@ -18,7 +18,7 @@ import time
 import numpy as np
 import psutil
 
-from landmarks import HandTracker, INDEX_TIP
+from handsfree.landmarks import HandTracker, INDEX_TIP
 
 RESOLUTIONS = [(640, 480), (320, 240)]
 

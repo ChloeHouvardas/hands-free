@@ -20,14 +20,15 @@ def main():
     ap.add_argument("--port", type=int, default=8080)
     args = ap.parse_args()
 
-    # Imported here, not at module level, so replay.py can use this file on a
-    # machine with no camera and no picamera2.
+    # Imported after parsing, not at module level, so `--help` still works on a
+    # machine with no camera and no MediaPipe — which is how you check the flags
+    # from a laptop before running it on the Pi.
     import time
 
     import cv2
 
-    from landmarks import HandTracker, draw
-    from preview import Preview
+    from handsfree.landmarks import HandTracker, draw
+    from handsfree.preview import Preview
 
     tracker = HandTracker(args.width, args.height,
                           rotate=rotation(args.rotate))
