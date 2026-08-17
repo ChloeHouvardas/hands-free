@@ -19,11 +19,12 @@ is standard library only.
 handsfree/
   __main__.py                                             the one entry point
   config.py  hand.py  filters.py  gestures.py  synth.py   no hardware, stdlib only
-  hid.py  driver.py                                       no hardware either
+  hid.py  driver.py  scripts.py  sources.py             no hardware either
   capture.py  landmarks.py  preview.py                    camera and MediaPipe
   transport/  null.py bluetooth.py usb.py                 where reports go out
   cli/                                                    one file per command
-test_gestures.py  test_hid.py  test_driver.py             run them directly
+test_*.py    gestures hid driver scenarios preview        run them directly
+             transport uhid soak
 config.toml                                               every threshold
 handsfree.service                                         optional, run at boot
 ```
@@ -34,6 +35,7 @@ handsfree.capture ← handsfree.landmarks ← cli.record, cli.bench
 handsfree.hand, handsfree.filters ← handsfree.gestures ← cli.replay, test_gestures.py
 handsfree.hid ← handsfree.driver ← cli.run, test_driver.py
 handsfree.hid ← handsfree.transport.{null,bluetooth,usb} ← cli.run, cli.pair
+handsfree.synth ← handsfree.scripts ← handsfree.sources ← cli.run
 ```
 
 Note where the line falls: `hid.py` and `driver.py` are on the **no hardware**
@@ -53,10 +55,17 @@ side. All the byte-level and timing logic is testable on a laptop; only
 | `handsfree/hid.py` | Report descriptors and report bytes. Pure; imports nothing. |
 | `handsfree/driver.py` | Gesture events → input reports, the interpolation thread, and the guards that stop a mouse button being left held down. |
 | `handsfree/transport/` | Where reports go: Bluetooth, USB, or `null` (prints them). |
+| `handsfree/sources.py` | Where frames come from: the camera, a recording, or generated hands. |
+| `handsfree/scripts.py` | Scripted sessions, each carrying what it's supposed to produce. |
 | `handsfree/cli/` | The `main()` for each command. Everything that touches hardware lives here. |
 | `test_gestures.py` | 36 tests over generated hands. Stays at the root so `python3 test_gestures.py` works. |
 | `test_hid.py` | 18 tests. Parses each descriptor back and checks it describes the report we send. |
 | `test_driver.py` | 25 tests, most of them asking "is the button up?" |
+| `test_scenarios.py` | 14 whole sessions, asserting outcomes rather than events. |
+| `test_preview.py` | 13 tests over plain HTTP, no browser. |
+| `test_transport.py` | 19 tests. Socket framing anywhere; SDP and ports on the Pi. |
+| `test_uhid.py` | 15 tests. Pi only — hands our bytes to the kernel's HID parser. |
+| `test_soak.py` | Threads, file descriptors and memory over 20 minutes. |
 
 ## Running it
 
@@ -74,14 +83,20 @@ Use `--no-preview` when the cursor matters — Wi-Fi and Bluetooth share one
 antenna on a Pi 4. `--transport null` runs the whole chain without touching the
 Mac, and needs no root.
 
-On the Mac, with no hardware:
+One command for all of it, which skips what this machine can't do and says so:
 
 ```sh
-python3 test_gestures.py
-python3 test_hid.py
-python3 test_driver.py
-python3 -m handsfree replay 'recordings/*.jsonl' --check
-python3 -m handsfree replay 'recordings/*.jsonl' --check --drive   # + transport
+python3 -m handsfree selftest            # on a laptop
+sudo venv/bin/python -m handsfree selftest --soak    # on the Pi, the lot
+```
+
+The whole app also runs with no camera at all, which is the fastest way to see
+a change work:
+
+```sh
+python3 -m handsfree run --source synth:demo --transport null --no-preview
+python3 -m handsfree run --source replay:recordings/pinch.jsonl --transport null
+python3 -m handsfree replay 'recordings/*.jsonl' --check --drive
 ```
 
 Everything is a subcommand of `python3 -m handsfree`; run
