@@ -88,3 +88,67 @@ distance = 1.00      # hand sizes travelled before it fires
 dominance = 1.80     # how much more sideways than vertical it has to be
 window = 1.20        # travel has to happen within this rolling window
 refractory = 0.60    # dead time after a swipe, so one flick isn't two
+
+[hid]
+# What the Mac actually receives. Everything above this line is about deciding
+# what you meant; everything here is about saying it.
+
+# bluetooth | usb | null. USB needs a part that separates power from data on
+# the Pi's one USB-C port — until that exists, Bluetooth is the only one that
+# reaches a Mac. `null` prints reports instead and runs anywhere.
+backend = "bluetooth"
+# What shows up in the Mac's Bluetooth list.
+name = "Hands-Free"
+
+# relative | absolute.
+# `relative` sends deltas, the way every mouse does. macOS then applies its own
+# pointer acceleration, so hand position and cursor position drift apart over a
+# session and the One Euro filter ends up fighting a second, invisible one.
+# `absolute` reports a position in a fixed box, the way a graphics tablet does:
+# no acceleration, no drift, and the engine already works in normalized screen
+# space so it's very nearly a straight multiply. Relative is the default only
+# because it's the one every host is guaranteed to understand — try absolute.
+pointer = "relative"
+
+# Virtual pixels for a full sweep of the cursor across its normalized range.
+# Interacts with [cursor] gain, which decides how much hand travel that takes.
+# Higher = faster and coarser.
+speed = 1400
+# Cap on a single report, in those same pixels. One bad landmark frame must not
+# be able to fling the cursor across the screen. The clipped part isn't thrown
+# away, it's carried into the next tick, so real fast movement still arrives.
+max_step = 30
+
+# The interpolation thread. The vision loop sets a new target about nine times
+# a second; sending those straight through gives a cursor that arrives in 110ms
+# jumps, which reads as lag even though the latency is identical. This eases
+# between them instead.
+interpolate_hz = 120
+# Time constant of that easing, in seconds. Roughly how long it takes to cover
+# most of the distance to a new target. Up = smoother and laggier; 0 disables
+# it and sends targets raw.
+ease = 0.045
+
+# The two guards that stop a held button outliving the gesture that started it.
+# A stuck mouse button makes a Mac unusable, so both are deliberately shorter
+# than feels necessary — ending a drag early is an annoyance, leaving one open
+# is a reboot.
+# No update from the vision loop for this long and the button is released. The
+# loop runs at ~9.5 fps with spikes to 219ms, so this is about 5x headroom.
+watchdog = 1.00
+# Hard ceiling on a held button, whatever the gesture layer believes. Needed:
+# recordings/drag.jsonl ends with a pinch the engine never sees released and an
+# 8 second drag still open.
+max_drag = 6.00
+
+# Multiplier on scroll ticks. Negative flips the direction, which is what you
+# want if macOS "natural scrolling" is set the opposite way to your hand.
+scroll = 1.0
+
+# macOS multi-touch gestures can't be sent by any external device, so a
+# three-finger swipe becomes a keyboard shortcut. These are the Mission Control
+# space-switching defaults — check they're actually enabled in the target Mac's
+# Keyboard Shortcuts before blaming the code. `cmd+shift+[` / `]` for tabs is
+# the other obvious pair.
+swipe_left = "ctrl+left"
+swipe_right = "ctrl+right"
