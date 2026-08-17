@@ -25,6 +25,7 @@ from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python import vision
 
 from capture import open_camera
+from config import rotation
 # Constants and geometry live in hand.py, which imports nothing — so the gesture
 # layer stays usable on a machine without a camera.
 from hand import CONNECTIONS, INDEX_TIP, MIDDLE_MCP, THUMB_TIP, WRIST  # noqa: F401
@@ -95,12 +96,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--width", type=int, default=640)
     ap.add_argument("--height", type=int, default=480)
-    ap.add_argument("--rotate", type=int, default=0,
+    ap.add_argument("--rotate", type=int, default=None,
                     choices=[0, 90, 180, 270],
-                    help="straighten a sideways-mounted camera")
+                    help="override the mounting angle in config.toml")
     args = ap.parse_args()
 
-    tracker = HandTracker(args.width, args.height, rotate=args.rotate)
+    tracker = HandTracker(args.width, args.height, rotate=rotation(args.rotate))
     last, fps = time.perf_counter(), 0.0
 
     try:

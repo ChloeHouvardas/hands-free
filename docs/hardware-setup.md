@@ -31,13 +31,24 @@ Hostname `chloespie`, user `chloewashere` — substitute your own throughout.
 
 ## 2b. Camera orientation
 
-This camera is mounted sideways, so every script needs `--rotate 90`.
+This camera is mounted upside down, so every frame is rotated 180° before it
+reaches the model. That lives in `config.toml`:
+
+```toml
+[camera]
+rotate = 180
+```
+
+Remount the camera and you change that one number — every script picks it up.
+`--rotate` overrides it for a one-off test.
 
 It matters more than it looks: MediaPipe is trained on upright hands and gets
-noticeably worse on rotated ones. Rotating in software costs ~1ms.
+noticeably worse on rotated ones, so a wrong value here shows up as a hand that
+keeps being lost rather than as an obviously sideways picture. Rotating in
+software costs ~1ms.
 
 Aim it at wherever your hand will actually rest — not across the desk. Check the
-framing with the live view in `record.py` before recording anything.
+framing in the live view before recording anything.
 
 ## 3. Boot
 

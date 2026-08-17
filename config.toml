@@ -9,6 +9,13 @@
 # rate wanders between 8 and 12 fps and a frame count means a different amount
 # of real time from one run to the next.
 
+[camera]
+# The camera is physically mounted upside down, so every frame is rotated
+# before it reaches MediaPipe — which is trained on upright hands and gets
+# noticeably worse on rotated ones. Costs about a millisecond.
+# Change this if you remount the camera; --rotate overrides it for a one-off.
+rotate = 180
+
 [fingers]
 # A finger counts as extended above `extend` and only stops counting below
 # `curl`. Two thresholds, not one, or a finger sitting on the line chatters.

@@ -38,20 +38,13 @@ what makes it survive a frame rate that wanders and a camera mounted sideways.
 """
 
 import argparse
-import os
-import tomllib
 from collections import deque
 
 from hand import (FINGERS, finger_angles, hand_scale, palm_centroid,
                   pinch_ratio, thumb_abduction)
 from filters import OneEuro2D
 
-CONFIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.toml")
-
-
-def load_config(path=CONFIG):
-    with open(path, "rb") as f:
-        return tomllib.load(f)
+from config import load_config, rotation  # noqa: F401  (re-exported)
 
 
 class Event:
@@ -487,7 +480,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--width", type=int, default=640)
     ap.add_argument("--height", type=int, default=480)
-    ap.add_argument("--rotate", type=int, default=0, choices=[0, 90, 180, 270])
+    ap.add_argument("--rotate", type=int, default=None, choices=[0, 90, 180, 270],
+                    help="override the mounting angle in config.toml")
     ap.add_argument("--no-preview", action="store_true")
     ap.add_argument("--port", type=int, default=8080)
     args = ap.parse_args()
@@ -501,7 +495,8 @@ def main():
     from landmarks import HandTracker, draw
     from preview import Preview
 
-    tracker = HandTracker(args.width, args.height, rotate=args.rotate)
+    tracker = HandTracker(args.width, args.height,
+                          rotate=rotation(args.rotate))
     preview = None if args.no_preview else Preview(port=args.port)
     engine = GestureEngine()
     t0 = time.perf_counter()

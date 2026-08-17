@@ -27,6 +27,7 @@ import time
 import cv2
 
 from landmarks import HandTracker, draw
+from config import rotation
 from preview import Preview, lan_ip
 
 OUT_DIR = "recordings"
@@ -213,9 +214,9 @@ def main():
     ap.add_argument("--seconds", type=int, default=20)
     ap.add_argument("--width", type=int, default=640)
     ap.add_argument("--height", type=int, default=480)
-    ap.add_argument("--rotate", type=int, default=0,
+    ap.add_argument("--rotate", type=int, default=None,
                     choices=[0, 90, 180, 270],
-                    help="straighten a sideways-mounted camera")
+                    help="override the mounting angle in config.toml")
     ap.add_argument("--port", type=int, default=8080)
     ap.add_argument("--no-preview", action="store_true")
     args = ap.parse_args()
@@ -226,7 +227,7 @@ def main():
     clips = SESSION if args.session else [(args.label, args.seconds, None)]
 
     print("\nStarting the camera (a few seconds)...")
-    tracker = HandTracker(args.width, args.height, rotate=args.rotate)
+    tracker = HandTracker(args.width, args.height, rotate=rotation(args.rotate))
     preview = None if args.no_preview else Preview(port=args.port)
     rec = Recorder(tracker, preview)
 
