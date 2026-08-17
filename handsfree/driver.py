@@ -129,6 +129,13 @@ class Driver:
 
     def close(self):
         """Let go of everything. Safe to call twice, and it will be."""
+        # atexit holds a strong reference to the callback, and so to this
+        # Driver, its transport, and every report that transport recorded.
+        # Registering without ever unregistering is an unbounded leak — 1895
+        # sessions grew RSS by 41 MB with threads and fds both flat, which is
+        # exactly the shape only a soak run can see.
+        atexit.unregister(self.close)
+
         with self._lock:
             if self._closed:
                 return
