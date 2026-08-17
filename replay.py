@@ -19,7 +19,7 @@ import json
 import os
 from types import SimpleNamespace
 
-from gestures import GestureEngine
+from handsfree.gestures import GestureEngine
 
 # clip -> {event: (min, max)}. None as a bound means don't care.
 #

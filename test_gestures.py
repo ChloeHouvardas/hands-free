@@ -13,7 +13,8 @@ import math
 import random
 
 from handsfree import synth
-from gestures import GestureEngine, load_config
+from handsfree.config import load_config
+from handsfree.gestures import GestureEngine
 
 
 def run(frames, fps=9.5, engine=None):
@@ -72,7 +73,7 @@ def test(fn):
 @test
 def test_poses_classify_at_any_rotation():
     """The whole reason for using joint angles instead of coordinates."""
-    from gestures import Fingers, classify
+    from handsfree.gestures import Fingers, classify
     cfg = load_config()
     want = {"OPEN": "PALM", "POINT": "POINT", "LAZY_POINT": "POINT",
             "TWO": "TWO", "THREE": "THREE"}
@@ -89,7 +90,7 @@ def test_poses_classify_at_any_rotation():
 @test
 def test_pose_survives_distance_and_position():
     """Thresholds are in hand-sizes, so none of this should matter."""
-    from gestures import Fingers, classify
+    from handsfree.gestures import Fingers, classify
     cfg = load_config()
     for scale in (0.10, 0.22, 0.40):
         for x, y in ((0.2, 0.2), (0.5, 0.5), (0.85, 0.8)):
@@ -201,7 +202,7 @@ def test_the_thumb_only_breaks_ties():
     even if the thumb happens to drift out — otherwise swipes get eaten. But a
     half-straight pinky is a genuine coin flip, and there PALM wins.
     """
-    from gestures import Fingers, classify
+    from handsfree.gestures import Fingers, classify
     cfg = load_config()
 
     def read(pinky_curl, thumb):
