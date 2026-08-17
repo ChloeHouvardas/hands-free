@@ -16,6 +16,7 @@ COMMANDS = {
     "pair": "set the Pi up as a Bluetooth mouse and pair a Mac with it",
     "record": "record a landmark session to recordings/*.jsonl",
     "replay": "replay recordings through the gesture layer",
+    "selftest": "run every test suite this machine can run",
     "bench": "FPS, latency, CPU and jitter",
     "capture": "camera only, no ML — to tell the two halves apart",
     "landmarks": "draw the 21 landmarks on the live view",
