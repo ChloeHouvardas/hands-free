@@ -15,3 +15,4 @@
 | Swipe | Travel vs the furthest point in a rolling window | A fixed anchor resets mid-gesture and misses slow swipes; the window still rejects slow drift. |
 | Thresholds | `config.toml`, in seconds and hand-sizes | Frame counts break when the rate wanders 8–12 fps; pixel distances break when the hand moves closer. |
 | Gesture tuning | Recorded clips + generated hands | Recordings keep it honest about real sloppy input; `synth.py` keeps it from overfitting to one afternoon's hands. |
+| Code layout | `handsfree/` package at the root, with shim scripts | Root holds what you run, the package holds what you import. Not `src/` — that layout requires installing the project to run it, and this one is deployed by `git pull` and run in place. |
