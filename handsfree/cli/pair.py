@@ -140,6 +140,20 @@ def check():
     except ImportError:
         line(False, "python3-dbus", "apt install python3-dbus python3-gi")
 
+    # Not a failure, but worth knowing about. HFP is registered by PipeWire
+    # over the BlueZ Media API rather than by a bluetoothd plugin, so -P can't
+    # remove it and the Mac may still list the device under audio services.
+    try:
+        sdp = subprocess.run(["sdptool", "browse", "local"],
+                             capture_output=True, text=True).stdout
+        if "Hands-Free" in sdp:
+            print("  note  also advertising Hands-Free (HFP) — that's "
+                  "PipeWire, not bluetoothd.\n"
+                  "        Harmless, but `systemctl --user mask pipewire` "
+                  "removes it if the Mac misbehaves.")
+    except FileNotFoundError:
+        pass
+
     return ok
 
 

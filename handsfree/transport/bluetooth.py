@@ -349,20 +349,48 @@ class Backend:
                      ("_ctrl", "_intr", "_listen_ctrl", "_listen_intr")]
             self._ctrl = self._intr = None
         for sock in socks:
+            if sock is None:
+                continue
             try:
-                if sock is not None:
-                    sock.close()
+                # shutdown() before close(), because the accept thread is
+                # sitting inside accept() on the listeners and close() alone
+                # doesn't wake it — the fd stays claimed, and the *next* run
+                # fails to bind PSM 17 with EADDRINUSE. Restarting the app
+                # after a Ctrl-C is not an edge case.
+                sock.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass                    # already dead, or never connected
+            try:
+                sock.close()
             except OSError:
                 pass
+
+        accepting = getattr(self, "_accepting", None)
+        if accepting is not None and accepting is not threading.current_thread():
+            accepting.join(timeout=1.0)
+
+        bluez = getattr(self, "bluez", None)
+        if bluez is None:
+            return
         try:
             import dbus
-            pm = dbus.Interface(
-                getattr(self, "bluez")["bus"].get_object(
-                    "org.bluez", "/org/bluez"),
-                "org.bluez.ProfileManager1")
-            pm.UnregisterProfile(PROFILE_PATH)
+            root = bluez["bus"].get_object("org.bluez", "/org/bluez")
+            dbus.Interface(root, "org.bluez.ProfileManager1") \
+                .UnregisterProfile(PROFILE_PATH)
+            # The agent has to go too, and so do the exported objects. BlueZ
+            # keeps the agent registered otherwise, and dbus-python refuses to
+            # export a second object on the same path — so a second transport
+            # in one process dies with "there is already a handler", which is
+            # exactly what a test that starts and stops the wire twice does.
+            dbus.Interface(root, "org.bluez.AgentManager1") \
+                .UnregisterAgent(AGENT_PATH)
         except Exception:
             pass
+        for name in ("agent", "profile"):
+            try:
+                bluez[name].remove_from_connection()
+            except Exception:
+                pass
 
     def __enter__(self):
         return self
