@@ -279,17 +279,40 @@ def test_the_null_backend_needs_nothing_at_all():
 
 # -- the Pi-only half -------------------------------------------------------
 
+def sdp_records():
+    """What we're advertising right now, as sdptool sees it."""
+    return subprocess.run(["sdptool", "browse", "local"],
+                          capture_output=True, text=True).stdout
+
+
+class Advertising:
+    """Bring the real transport up, so the SDP tests test the real thing.
+
+    The HID profile lives only as long as the D-Bus connection that registered
+    it, so checking for it without holding one open would only ever tell you
+    whether some *other* handsfree process happened to be running.
+    """
+
+    def __enter__(self):
+        from handsfree.transport.bluetooth import Backend
+        from handsfree.config import load_config
+        self.wire = Backend(load_config().get("hid", {}), verbose=False)
+        return self.wire
+
+    def __exit__(self, *exc):
+        self.wire.close()
+
+
 @on_the_pi
 def test_the_sdp_record_is_actually_published():
     """`sdptool browse local` without root shows nothing and exits 0 — it
     doesn't error, it lies. So this has to run as root to mean anything."""
     if os.geteuid() != 0:
         raise AssertionError("needs root, or sdptool reports an empty list")
-    out = subprocess.run(["sdptool", "browse", "local"],
-                         capture_output=True, text=True).stdout
+    with Advertising():
+        out = sdp_records()
     assert "Human Interface Device" in out, \
-        "no HID record published — the profile is only registered while a " \
-        "handsfree process is running. Start `pair` or `run` first."
+        "brought the transport up and still no HID record on the air"
 
 
 @on_the_pi
@@ -298,14 +321,26 @@ def test_the_published_descriptor_is_the_one_we_generate():
     every byte-level test in this repo is describing something else."""
     if os.geteuid() != 0:
         raise AssertionError("needs root")
-    out = subprocess.run(["sdptool", "browse", "local"],
-                         capture_output=True, text=True).stdout
+    with Advertising():
+        out = sdp_records()
+    flat = out.replace(" ", "").replace("\n", "").lower()
     for pointer in hid.POINTERS:
-        wanted = hid.combined_descriptor(pointer).hex()
-        if wanted in out.replace(" ", "").replace("\n", "").lower():
+        if hid.combined_descriptor(pointer).hex() in flat:
             return
     raise AssertionError("the published HID descriptor doesn't match any "
                          "descriptor hid.py generates")
+
+
+@on_the_pi
+def test_the_profile_is_released_when_we_close():
+    """Two runs in a row have to work — the second would fail to register if
+    the first never let go."""
+    if os.geteuid() != 0:
+        raise AssertionError("needs root")
+    with Advertising():
+        pass
+    with Advertising():
+        assert "Human Interface Device" in sdp_records()
 
 
 @on_the_pi
@@ -337,8 +372,7 @@ def test_the_adapter_is_not_also_advertising_itself_as_a_speaker():
     negotiate A2DP instead of HID. Fixed by dropping those plugins too."""
     if os.geteuid() != 0:
         raise AssertionError("needs root")
-    out = subprocess.run(["sdptool", "browse", "local"],
-                         capture_output=True, text=True).stdout
+    out = sdp_records()
     noisy = [name for name in ("Audio Source", "Audio Sink", "AVRCP",
                                "Hands-Free unit") if name in out]
     assert not noisy, \
