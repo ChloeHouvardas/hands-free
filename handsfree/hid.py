@@ -30,11 +30,11 @@ why this is a config switch rather than an argument to have up front.
 """
 
 KEYBOARD_ID = 1
-MOUSE_ID = 2            # relative pointer
-ABSOLUTE_ID = 3         # absolute pointer, same seven bytes, different meaning
+MOUSE_ID = 2
 
-#: Which report ID carries which pointer mode.
-POINTER_IDS = {"relative": MOUSE_ID, "absolute": ABSOLUTE_ID}
+#: Both pointer modes ride the same report ID, because only one of them is in
+#: the descriptor at a time. See combined_descriptor for why.
+POINTER_IDS = {"relative": MOUSE_ID, "absolute": MOUSE_ID}
 
 # Report descriptor items are (prefix, data...) where the low two bits of the
 # prefix are the data length. Spelling them out as bytes rather than building
@@ -162,24 +162,26 @@ def mouse_descriptor(report_id=None, pointer="relative"):
     return _fill(_MOUSE_HEAD + axes + _MOUSE_TAIL, report_id)
 
 
-def combined_descriptor(pointer=None):
-    """One descriptor holding every device, told apart by report ID.
+def combined_descriptor(pointer="relative"):
+    """One keyboard and **one** pointer, told apart by report ID.
 
-    What Bluetooth publishes in its SDP record. It carries **both** pointer
-    modes — a relative mouse on report 2 and an absolute one on report 3 —
-    rather than one or the other.
+    What Bluetooth publishes in its SDP record.
 
-    That matters because macOS reads this once, at pair time, and caches it. If
-    the descriptor held only the configured mode, switching `[hid] pointer`
-    would mean forgetting the device and pairing again, which is not something
-    a plug-in device should ever ask of its host. Carrying both makes the mode
-    a runtime choice: pick a report ID and the host already knows what it means.
+    A previous version carried both pointer modes at once, on separate report
+    IDs, so that switching `[hid] pointer` wouldn't need a re-pair — macOS reads
+    this once, at pair time, and caches it. That was tidier and it did not work:
+    macOS stopped acting on reports entirely, while the same bytes still parsed
+    correctly under the Linux kernel's HID parser. The difference is two
+    `Usage(Mouse)` application collections in one descriptor; IOHIDFamily is
+    stricter than Linux about matching collections to drivers, and quietly
+    binds nothing rather than complaining.
 
-    `pointer` is accepted and ignored, so existing callers keep working.
+    So: one pointer per descriptor, chosen here. Switching mode means forgetting
+    the device on the Mac and pairing again. Worse ergonomics, but it works,
+    and the alternative silently doesn't.
     """
     return (keyboard_descriptor(KEYBOARD_ID)
-            + mouse_descriptor(MOUSE_ID, "relative")
-            + mouse_descriptor(ABSOLUTE_ID, "absolute"))
+            + mouse_descriptor(MOUSE_ID, pointer))
 
 
 # -- reports ---------------------------------------------------------------

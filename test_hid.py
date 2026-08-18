@@ -108,29 +108,30 @@ def test_the_descriptor_describes_the_report_we_actually_send():
 
 @test
 def test_the_combined_descriptor_sizes_every_report():
-    """Bluetooth publishes one descriptor for all three: a keyboard, a relative
-    pointer and an absolute one. Both pointers are present so that switching
-    mode is a runtime choice rather than a re-pair — macOS reads this once and
-    caches it."""
-    bits = decode(hid.combined_descriptor())
-    assert set(bits) == {hid.KEYBOARD_ID, hid.MOUSE_ID, hid.ABSOLUTE_ID}, \
-        sorted(bits)
+    """One keyboard and one pointer. Carrying both pointer modes at once was
+    tried and macOS silently stopped acting on any report — two Usage(Mouse)
+    application collections in one descriptor bind to nothing there, even
+    though the Linux kernel parses them happily."""
+    for pointer in hid.POINTERS:
+        bits = decode(hid.combined_descriptor(pointer))
+        assert set(bits) == {hid.KEYBOARD_ID, hid.MOUSE_ID}, sorted(bits)
 
-    # The report ID byte is part of the report but not counted in the
-    # descriptor's input bits, hence the -1.
-    kbd = hid.keyboard_report(report_id=hid.KEYBOARD_ID)
-    assert bits[hid.KEYBOARD_ID] == (len(kbd) - 1) * 8, bits
-    for pointer, rid in hid.POINTER_IDS.items():
-        mouse = hid.mouse_report(report_id=rid, pointer=pointer)
-        assert bits[rid] == (len(mouse) - 1) * 8, (pointer, bits)
+        # The report ID byte is part of the report but not counted in the
+        # descriptor's input bits, hence the -1.
+        kbd = hid.keyboard_report(report_id=hid.KEYBOARD_ID)
+        mouse = hid.mouse_report(report_id=hid.MOUSE_ID, pointer=pointer)
+        assert bits[hid.KEYBOARD_ID] == (len(kbd) - 1) * 8, bits
+        assert bits[hid.MOUSE_ID] == (len(mouse) - 1) * 8, (pointer, bits)
 
 
 @test
-def test_the_two_pointer_modes_have_different_report_ids():
-    """Sending absolute coordinates under the relative ID would be read as an
-    enormous delta, which is the whole hazard of sharing one descriptor."""
-    assert hid.POINTER_IDS["relative"] != hid.POINTER_IDS["absolute"]
-    assert set(hid.POINTER_IDS) == set(hid.POINTERS)
+def test_only_one_pointer_is_ever_published():
+    """The failure this reverted from: macOS binds nothing when a descriptor
+    holds two Usage(Mouse) application collections."""
+    for pointer in hid.POINTERS:
+        desc = hid.combined_descriptor(pointer)
+        assert desc.count(bytes([0x09, 0x02])) == 1, \
+            f"{pointer}: more than one Usage(Mouse) collection"
 
 
 @test
